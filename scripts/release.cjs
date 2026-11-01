@@ -11,7 +11,7 @@ const files = [
   'content.js','study-core.js','study-ai.js','study-panel.js','sidepanel.html','sidepanel.css','sidepanel.js',
   'options.html','options.css','options.js','icons/icon16.png','icons/icon48.png','icons/icon128.png',
   'prompts/analysis.md','prompts/explain.md','prompts/note-cleanup.md','prompts/translation.md',
-  'README.md','README.zh-CN.md','BILIBILI.md','PRIVACY.md','SECURITY.md','LICENSE','NOTICE.md','CHANGELOG.md','VALIDATION.md','DEVELOPMENT.md'
+  'README.md','README.en.md','README.zh-CN.md','BILIBILI.md','PRIVACY.md','SECURITY.md','LICENSE','NOTICE.md','CHANGELOG.md','VALIDATION.md','DEVELOPMENT.md'
 ].sort();
 const fail = message => { throw new Error(message); };
 const run = args => { const result=spawnSync(process.execPath,args,{stdio:'inherit'}); if(result.status!==0) fail(`Check failed: ${args.join(' ')}`); };

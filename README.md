@@ -1,35 +1,119 @@
-# Bilibili Study Digest
+# B 站学习 Digest
 
-An independent, experimental Bilibili-first fork of [YouTube Digest by Zara Zhang](https://github.com/zarazhangrui/youtube-digest). MIT licensed; not an official Zara release. Version 0.1.5.
+**简体中文** · [English](README.en.md)
 
-[Download v0.1.5 preview](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.5) · [中文说明](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [MIT license](LICENSE) · [Attribution](NOTICE.md)
+在 B 站视频旁阅读字幕、定位片段和整理重点的浏览器扩展。适合看课程、访谈和其他长视频时，一边看，一边查阅原文。
 
-Read the [Chinese guide](README.zh-CN.md) for setup and scope. This fork starts with raw captions and makes AI cleanup and overview generation explicit. It adds full-coverage chapter validation, source-checked quotes, chunk caching and retry, track selection, timestamp excerpts and configurable Chat Completions providers. YouTube support remains inherited from upstream and requires a Supadata key.
+**默认显示原始字幕，按段落阅读；需要时再开启 AI 整理。** 阅读、搜索和播放高亮无需 AI 密钥，也不会触发模型调用。
 
-## Install
+[下载安装包](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.5) · [安装步骤](#安装与开始使用) · [常见问题](#常见问题) · [版本记录](CHANGELOG.md)
 
-Keep the extracted folder in a permanent location. Open `edge://extensions` in Edge or `chrome://extensions` in Chrome, enable Developer mode, choose **Load unpacked**, and select the folder containing `manifest.json`. Refresh existing video tabs. Open the floating Digest button or the toolbar extension icon. Bilibili raw captions do not require an AI key; some captions require signing into Bilibili normally. Enter your own AI key in Settings only when you want AI features. No keys ship with the extension.
+当前版本为 **v0.1.5 开发预览**，支持 Edge / Chrome，尚未上架扩展商店。基于 [Zara Zhang 的 YouTube Digest](https://github.com/zarazhangrui/youtube-digest) 二次开发，采用 MIT 协议，独立维护。
 
-Version 0.1.2 reads Bilibili metadata and captions directly from the extension background using signed Bilibili APIs. It no longer requires dynamic page-script injection for these reads. Reload the extension after updating; if prompted, allow access to the Bilibili API and caption CDN domains. Playback controls still use a content script.
+## 能做什么
 
-Version 0.1.3 highlights the current caption range, shows playback synchronization status, and follows playback automatically. Manual scrolling pauses scrolling while highlighting continues; use the return-to-playback button to resume. The content script prioritizes the main player and falls back to its displayed clock if a custom player's time is unreadable. This fallback has whole-second precision. Missing time is reported instead of treated as zero. No AI request is needed for playback highlighting.
+| 功能 | 使用方式 | 是否调用 AI |
+|---|---|---|
+| 字幕阅读 | 默认按段落展示，可切回逐句；支持切换平台提供的字幕轨 | 否 |
+| 播放同步 | 播到哪里，段内对应字幕就高亮；点击字幕或时间戳跳转 | 否 |
+| 搜索与回看 | 搜索字幕关键词，定位相关片段；手动滚动后可回到播放位置 | 否 |
+| 摘录与导出 | 保存带时间戳的原文摘录，复制或导出 TXT 字幕、Markdown 摘录 | 否 |
+| AI 整理断句 | 主动点击后整理标点和分段，可切回原始字幕 | 是，按需 |
+| 翻译与解释 | 将英文字幕切换为中文或双语，也可解释选中文字 | 是，按需 |
+| 章节概览 | 主动生成章节、要点和原文金句；长视频分批处理 | 是，按需 |
 
-Version 0.1.4 reads playback time directly from the bound tab, uses the worker only for recovery, and scopes video detection to the panel's own window. A reconnect button requests Bilibili page access when needed and restores the page receiver. Specific error codes and expandable diagnostics replace the generic synchronization warning. The panel header displays the installed version. Caption API access and video-page access are separate permissions.
+段落排版在本地完成，不改写字幕文字。每个原始字幕片段保留自己的时间和高亮；没有标点的字幕不会自动补标点。需要调整标点时，可选择「AI 整理断句」。
 
-## Costs and limitations
+## 安装与开始使用
 
-Version 0.1.5 defaults to a local paragraph layout with a sentence-layout toggle. It groups source cues using pauses, existing punctuation and length limits without rewriting their text. Individual cues retain their playback highlight, click-to-seek time and search identity; a search phrase can span multiple original cues in a paragraph. Layout switching preserves the visible reading anchor and does not start AI tasks. Each video's layout is saved with its reading position. AI cleanup remains explicit and keeps its own paragraph boundaries; exports retain their existing source granularity.
+### 1. 下载并加载扩展
 
-Opening a video or overview tab does not invoke AI. Chinese/bilingual mode, cleanup, overview generation, explanations, full translation and connection tests invoke the configured provider after a user action. Cache hits do not call the model. Stopping prevents later batches; already sent requests can still be billed. Failed responses can also incur charges. Reopening starts in Original mode.
+1. 打开[版本发布页](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.5)，下载附件 **`bilibili-study-digest-v0.1.5.zip`**。
+2. 解压到一个长期保留的文件夹，确认里面有 `manifest.json`。不要直接选择 ZIP 文件。
+3. 在地址栏打开 Edge 的 `edge://extensions`，或 Chrome 的 `chrome://extensions`。
+4. 开启「开发者模式」，点击「加载已解压的扩展程序」，选择刚才的文件夹。
 
-Only standard BV video pages and multipart videos are supported for Bilibili. No automatic ASR fallback is provided. Chapter validation checks source coverage, not factual accuracy. This build is not store-published. See [validation results](VALIDATION.md) for tested and untested scope, and [development plan](DEVELOPMENT.md).
+### 2. 打开 B 站视频
 
-## Development
+刷新已经打开的视频页，点击右下角的「Digest · 字幕」浮动按钮，或浏览器工具栏里的扩展图标，即可打开侧栏。
 
-Node.js 22+: `npm test`, `npm run check`, `npm run package`. Optional browser smoke tests: `npm install`, `npx playwright install chromium`, `npm run test:browser`. Set `BROWSER_EXECUTABLE` to use an existing browser in an isolated test context. The release ZIP uses an explicit allowlist and contains no test fixtures or local settings.
+先试试原始字幕、关键词搜索、点击跳转和保存摘录。这些功能不需要模型 API 密钥；部分平台字幕需要先登录 B 站。如果提示「允许 B 站字幕服务」，按提示授权。
 
-## Credits
+### 3. 按需配置 AI
 
-Maintained independently by [lumia-zhu](https://github.com/lumia-zhu/bilibili-study-digest). Based on Zara Zhang's MIT-licensed youtube-digest v1.2.0 (`bb2f7b1`), with Bilibili adaptation from [PR #17 by Clawborn](https://github.com/zarazhangrui/youtube-digest/pull/17), commit `2fffd55`. Original copyright is preserved in [LICENSE](LICENSE), with an additional notice for this project's modifications. See [NOTICE.md](NOTICE.md) for the complete provenance and redistribution notices. This project does not imply endorsement by its upstream authors.
+需要整理、翻译或生成概览时，在「设置」中填写自己的 API 密钥、服务地址和模型。默认提供 DeepSeek 配置，也支持兼容 Chat Completions 的服务。模型是否可用取决于服务方和你的账号。
 
-The background Bilibili API client and WBI signer are adapted from [biuworks/bilibili-digest](https://github.com/biuworks/bilibili-digest), commit `e1fab3e` (MIT, k1234567; portions Zara Zhang). See [vendor attribution and changes](vendor/bilibili-digest/NOTICE.md) and the [included MIT license](vendor/bilibili-digest/LICENSE).
+原文阅读不需要完成这一步。「测试连接」会向所选服务发送一次短请求。
+
+更新时请重新加载扩展，再刷新视频页。保留安装文件夹；移动或删除后可能需要重新加载。Edge 的解压安装可能使用独立副本，请确认更新的是实际加载的目录。
+
+## AI 使用与费用
+
+- 打开视频、阅读原文、切换段落/逐句排版或进入概览页，都不会自动调用 AI。概览需要点击生成。
+- 整理断句、中文/双语翻译、全文翻译、解释、生成概览和测试连接，会在你的操作下调用已配置的服务，可能产生费用。
+- 命中本地缓存时不再调用模型；处理失败后可复用成功批次继续。重新生成可能再次计费。
+- 「停止后续处理」只停止尚未发出的批次。已经发出的请求以及失败请求仍可能被服务方计费。
+- 重新打开视频从原文模式开始。密钥由你在设置中填写，项目不附带密钥。数据流向见[隐私说明](PRIVACY.md)。
+
+## 常见问题
+
+### 能看到字幕，却没有播放高亮或浮动按钮？
+
+字幕读取与视频页面连接是两条独立的路径，能加载字幕不代表同步已连接。
+
+如果 Edge 提示 `PAGE_ACCESS_BLOCKED / Blocked`，保持 B 站视频页打开，点击地址栏右侧的扩展拼图图标，检查顶部 **「允许在 bilibili.com 使用扩展」** 开关。允许后刷新视频页，再点击侧栏里的「重新连接播放」。这个站点开关与扩展详情页的访问权限不同。
+
+如果仍然失败，可查看侧栏「同步诊断」里的版本和错误码。其他浏览器策略也可能造成拦截，不能只凭错误码确定原因。
+
+### 为什么有些视频没有字幕？
+
+本项目读取 B 站实际提供、当前会话可访问的字幕。有些视频需要登录，有些本来就没有可用字幕。当前版本不提供自动语音转写，也不会绕过内容访问限制。
+
+### 概览会不会只总结视频开头？
+
+长字幕分批处理，并检查各批次是否连续覆盖原始字幕。失败批次会显示对应范围，可重试。覆盖检查不等于事实核验，AI 摘要仍需对照原文确认。
+
+### 可以用在 YouTube 上吗？
+
+保留了上游 YouTube 兼容入口，需要单独配置 Supadata 密钥。当前开发和测试重点是 B 站，YouTube 真实链路尚未完成验收。
+
+## 当前范围
+
+- 支持 B 站普通 BV 视频页和分 P；直播、番剧不在当前范围内。
+- 原文、整理结果和不同字幕轨分开处理；不完整翻译的导出会明确提示，避免被当作完整结果。
+- 原文摘录可以保存和导出，暂不提供个人理解笔记编辑器。
+- 本地段落规则不保证按话题准确分段；播放器备用时钟读取只有秒级精度。
+- 这是开发预览，尚未完成全部真实视频、登录配置、真实模型和商店安装验收。[验证记录](VALIDATION.md)列出了已测范围与限制。
+
+## 开发与验证
+
+需要 Node.js 22 或更新版本。核心运行与 Node 测试无需安装第三方依赖。
+
+```sh
+npm test
+npm run check
+npm run package
+```
+
+可选浏览器测试：
+
+```sh
+npm install
+npx playwright install chromium
+npm run test:browser
+npm run test:extension
+```
+
+可通过 `BROWSER_EXECUTABLE` 指定测试浏览器。浏览器测试创建独立临时上下文，使用模拟字幕和模型响应，不读取个人浏览器配置或密钥。发布包按文件白名单生成，不包含测试数据或本地设置。
+
+更多内容见[开发与验收流程](DEVELOPMENT.md)、[验证记录](VALIDATION.md)和[版本记录](CHANGELOG.md)。
+
+## 来源与 MIT 授权
+
+本项目由 [lumia-zhu](https://github.com/lumia-zhu) 独立维护，基于 **Zara Zhang 的 [youtube-digest](https://github.com/zarazhangrui/youtube-digest)** v1.2.0（`bb2f7b1`）二次开发，保留原始提交历史和 `Copyright (c) 2026 Zara Zhang`。不是 Zara 的官方版本，也不代表原作者背书。
+
+- 社区 B 站适配参考并集成 [Clawborn 的 PR #17](https://github.com/zarazhangrui/youtube-digest/pull/17)，提交 `2fffd55`。
+- 后台字幕 API 客户端和 WBI 签名改编自 [biuworks/bilibili-digest](https://github.com/biuworks/bilibili-digest)，提交 `e1fab3e`，保留 k1234567 与 Zara Zhang 的版权声明。
+- 本项目继续使用 [MIT 许可证](LICENSE)。再分发时请保留相关版权声明和完整许可证，包括第三方代码的许可证。
+
+完整来源、使用范围及修改说明见 [NOTICE.md](NOTICE.md) 和[第三方代码说明](vendor/bilibili-digest/NOTICE.md)。
