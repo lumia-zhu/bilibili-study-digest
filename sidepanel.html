@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Digest</title>
+    <title>B 站学习 Digest</title>
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <!-- HEADER -->
-    <!-- Note: the panel's own "YouTube Digest" title is shown by Chrome's side-panel
+    <!-- Note: the panel's own "B 站学习 Digest" title is shown by Chrome's side-panel
          title bar, so we don't repeat a logo here. -->
     <div class="header">
       <div class="header-top">
@@ -18,14 +18,15 @@
           <div class="video-channel" id="videoChannel"></div>
         </div>
         <div class="header-actions">
+          <small id="extensionVersion" class="extension-version"></small>
           <button
             class="settings-btn"
             id="settingsBtn"
             type="button"
-            title="Open YouTube Digest settings"
-            aria-label="Open YouTube Digest settings"
+            title="Open B 站学习 Digest settings"
+            aria-label="Open B 站学习 Digest settings"
           >
-            Settings
+            设置
           </button>
           <div
             class="transcript-mode-control global-language-control"
@@ -39,7 +40,7 @@
               type="button"
               data-transcript-mode="original"
               aria-pressed="true"
-            >Original</button>
+            >原文</button>
             <button
               class="transcript-mode-btn"
               type="button"
@@ -63,21 +64,31 @@
 
       <!-- Tab navigation -->
       <div class="tabs" id="tabsNav" style="display: none">
-        <button class="tab active" data-tab="transcript">Transcript</button>
-        <button class="tab" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="notes">Notes</button>
+        <button class="tab active" data-tab="transcript">字幕</button>
+        <button class="tab" data-tab="overview">概览</button>
+        <button class="tab" data-tab="notes">摘录</button>
       </div>
     </div>
 
+    <div id="studyToolbar" class="study-toolbar" hidden>
+      <div class="study-tools"><span id="subtitleSource">原始字幕优先 · AI 按需使用</span><select id="subtitleTrack" aria-label="字幕轨" hidden></select></div>
+      <div class="study-tools">
+        <button id="rawModeBtn" class="enhance-btn active">原始字幕</button>
+        <button id="cleanModeBtn" class="enhance-btn" disabled>整理结果</button>
+        <button id="cleanTranscriptBtn" class="enhance-btn">AI 整理断句</button>
+        <button id="translateAllBtn" class="enhance-btn">翻译全文</button>
+        <button id="stopStudyBtn" class="enhance-btn" disabled>停止后续处理</button>
+      </div>
+      <p id="studyStatus" role="status" aria-live="polite">原始字幕不调用模型。整理、翻译和概览由你主动开启。</p>
+    </div>
     <!-- MAIN CONTENT -->
     <div class="content" id="contentArea">
       <!-- WELCOME STATE -->
       <div id="welcomeState" class="welcome-container">
         <div class="welcome-icon" aria-hidden="true"></div>
-        <div class="welcome-title">Ready to Digest</div>
+        <div class="welcome-title">开始阅读视频</div>
         <div class="welcome-desc">
-          Navigate to a YouTube video and click the extension icon to get an
-          AI-powered digest.
+          打开 YouTube 或 B 站视频，点击扩展图标，即可阅读字幕、生成摘要和保存摘录。
         </div>
       </div>
 
@@ -85,9 +96,9 @@
       <div id="loadingState" style="display: none">
         <div class="loading-container">
           <div class="loading-bar"></div>
-          <div class="loading-text" id="loadingText">Fetching transcript</div>
+          <div class="loading-text" id="loadingText">正在获取字幕</div>
           <div class="loading-subtext" id="loadingSubtext">
-            Extracting captions from video...
+            读取当前视频字幕…
           </div>
         </div>
       </div>
@@ -110,13 +121,18 @@
         <div class="tab-panel active" data-panel="transcript">
           <div class="section">
             <div class="section-header transcript-section-header">
-              <div class="section-title">Full Transcript</div>
+              <div class="section-title">字幕全文</div>
               <div class="transcript-actions">
-                <button class="enhance-btn" id="copyTranscriptBtn">Copy</button>
+                <button class="enhance-btn" id="copyTranscriptBtn">复制</button>
                 <button class="enhance-btn" id="exportTranscriptBtn">
-                  Export
+                  导出 TXT
                 </button>
               </div>
+            </div>
+            <div class="transcript-layout-controls" role="group" aria-label="字幕排版">
+              <span>阅读排版</span>
+              <button type="button" data-reading-layout="paragraph" aria-pressed="true" title="按停顿和长度分段，保留原文，不调用 AI">段落</button>
+              <button type="button" data-reading-layout="sentence" aria-pressed="false" title="逐条显示平台原始字幕时间">逐句</button>
             </div>
             <!-- Search stays inside the Transcript tab and never changes playback. -->
             <div class="transcript-search" role="search">
@@ -132,7 +148,7 @@
                 class="transcript-search-input"
                 id="transcriptSearchInput"
                 type="search"
-                placeholder="Search words or phrases"
+                placeholder="搜索字幕关键词"
                 aria-label="Search transcript"
                 aria-controls="transcriptList"
                 autocomplete="off"
@@ -178,15 +194,24 @@
                 </button>
               </div>
             </div>
+            <label class="export-preference"><input type="checkbox" id="exportTimestamps" checked />复制与导出附时间戳</label>
+            <p id="playbackStatus" class="playback-status" aria-live="off"></p>
+            <button id="reconnectPlaybackBtn" class="enhance-btn" type="button" hidden>重新连接播放</button>
+            <details id="playbackDiagnostics" class="playback-diagnostics" hidden>
+              <summary>同步诊断</summary><pre id="playbackDiagnosticText"></pre>
+            </details>
             <div id="transcriptList"></div>
           </div>
         </div>
 
         <!-- TAB: Overview (chapters + key quotes) - requires LLM -->
         <div class="tab-panel" data-panel="overview">
+          <div class="study-tools"><button id="generateOverviewBtn" class="enhance-btn">生成／继续概览</button><button id="regenerateOverviewBtn" class="enhance-btn">重新生成</button></div>
+          <p class="help">点击后调用 AI；长视频分段处理，已完成部分保留。切换标签不会自动生成。</p>
+          <div id="overviewSummary"></div>
           <!-- Chapters -->
           <div class="section">
-            <div class="section-title">Chapters</div>
+            <div class="section-title">章节</div>
             <ul class="chapter-list" id="chapterList">
               <li
                 class="chapter-item"
@@ -196,14 +221,14 @@
                   border-color: var(--border);
                 "
               >
-                Chapters will appear here
+                点击上方按钮生成章节
               </li>
             </ul>
           </div>
 
           <!-- Key Quotes -->
           <div class="section">
-            <div class="section-title">Key Quotes</div>
+            <div class="section-title">原文金句</div>
             <div id="quotesList">
               <div
                 class="quote-item"
@@ -214,7 +239,7 @@
                 "
               >
                 <div class="quote-text" style="font-style: normal">
-                  Quotes will be extracted when you view this tab...
+                  生成概览后将在这里显示可核对的原文摘录。
                 </div>
               </div>
             </div>
@@ -225,28 +250,28 @@
         <div class="tab-panel" data-panel="notes">
           <div class="section">
             <div class="section-header">
-              <div class="section-title">Saved Notes</div>
+              <div class="section-title">已保存摘录</div>
               <div class="notes-filter">
                 <button
                   class="enhance-btn active"
                   id="notesFilterThis"
                   aria-pressed="true"
                 >
-                  This Video
+                  本视频
                 </button>
                 <button
                   class="enhance-btn"
                   id="notesFilterAll"
                   aria-pressed="false"
                 >
-                  All Notes
+                  全部摘录
                 </button>
               </div>
             </div>
             <p class="notes-intro" id="notesIntro">
-              Move your mouse over the video and click Note to save a
-              timestamped note, or press the "n" key while the video is focused.
+              点击视频页“保存摘录”，或选中字幕保存摘录。默认保存原文，不调用 AI。
             </p>
+            <button id="exportNotesBtn" class="enhance-btn">导出当前摘录列表</button>
             <div id="notesList"></div>
           </div>
         </div>
@@ -259,10 +284,14 @@
       id="followPlaybackBtn"
       style="display: none"
     >
-      Follow playback
+      回到播放位置
     </button>
 
     <script src="settings.js"></script>
+    <script src="platforms.js"></script>
+    <script src="playback-client.js"></script>
+    <script src="study-core.js"></script>
     <script src="sidepanel.js"></script>
+    <script src="study-panel.js"></script>
   </body>
 </html>

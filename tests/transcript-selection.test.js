@@ -94,7 +94,7 @@ test("the transcript view restores without resuming automatic scrolling", () => 
   );
   assert.match(
     source,
-    /pendingTranscriptViewState = await loadTranscriptViewState\(videoId\)/,
+    /const nextViewState = await loadTranscriptViewState\(videoId\)/,
   );
   assert.match(
     source,
@@ -128,11 +128,11 @@ test("the first non-YouTube navigation is checked again after commit", () => {
 test("the panel never borrows a background YouTube tab", () => {
   assert.match(
     source,
-    /const tabs = await chrome\.tabs\.query\(\{\s*active: true,\s*lastFocusedWindow: true,\s*\}\);/,
+    /const tabs = await chrome\.tabs\.query\(\{\s*active: true,\s*windowId,?\s*\}\);/,
   );
   assert.match(
     source,
-    /if \(!tab\.url\.startsWith\("https:\/\/www\.youtube\.com"\)\) \{\s*handleFrontTabUrl\(tab\.url\);\s*return;/,
+    /if \(!DIGEST_VIDEO\.supports\(tab\.url\)\) \{\s*handleFrontTabUrl\(tab\.url\);\s*return;/,
   );
   assert.doesNotMatch(
     source,

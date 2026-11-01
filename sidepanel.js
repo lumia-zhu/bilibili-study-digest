@@ -21,6 +21,8 @@ let currentTranscript = null;
 let currentTranscriptText = null; // Plain text (for display/export)
 let currentTranscriptTimestamped = null; // With timestamps for AI analysis
 let currentTranscriptLanguage = null;
+let currentTranscriptSource = null;
+let currentTranscriptTracks = [];
 let currentVideoTitle = "";
 let currentChannelName = "";
 let currentVideoDescription = "";
@@ -28,6 +30,8 @@ let currentVideoDuration = 0;
 let isAnalysisLoading = false; // Track if analysis is in progress
 let youtubeTabId = null; // Store the YouTube tab ID for reliable messaging
 let errorAction = null;
+let digestGeneration = 0;
+let tabCheckGeneration = 0;
 
 // --- Translation state ---
 // The universal language control supports original content, Chinese, and an
@@ -74,7 +78,7 @@ function sendTranslationMessage(message) {
       finish(
         reject,
         new Error(
-          "Translation request timed out after 130 seconds. Please Retry.",
+          "请求超过 130 秒，请重试；已发出请求可能计费。",
         ),
       );
     }, TRANSLATION_MESSAGE_TIMEOUT_MS);
@@ -98,6 +102,9 @@ function sendTranslationMessage(message) {
 let autoScrollEnabled = true; // True = scroll transcript to follow video playback
 let autoScrollInterval = null; // setInterval ID for polling video time
 let lastAutoScrollTime = 0; // Timestamp of last programmatic scroll (ignores scroll events within 1s)
+let playbackGeneration = 0;
+let playbackInFlight = null;
+let playbackRetryAfter = 0;
 
 // --- Transcript reading position state ---
 // Session storage survives a side panel close but clears when Chrome closes.
@@ -257,15 +264,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupEventListeners();
   await evictOldCacheEntries(20);
 
-  const configStatus = await chrome.runtime.sendMessage({
-    action: "checkConfig",
-  });
-
-  if (!configStatus.hasSupadataKey || !configStatus.hasAiKey) {
-    showConfigError(configStatus);
-    return;
-  }
-
   await checkCurrentTab();
 });
 
@@ -277,6 +275,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // (This used to force-clear the cache on every click, which silently
     // burned a transcript credit + analysis tokens per click.)
     checkCurrentTab();
+    sendResponse({ success: true });
+  }
+  if (message.action === "videoPageChanged" && sender.tab?.id === youtubeTabId) {
+    handleFrontTabUrl(sender.tab.url);
     sendResponse({ success: true });
   }
   if (message.action === "transcriptProgress") {
@@ -339,15 +341,18 @@ function panelIsShowingResults() {
  * refresh the digest when the video changed.
  */
 function handleFrontTabUrl(url) {
-  if (!(url || "").startsWith("https://www.youtube.com")) {
+  if (!DIGEST_VIDEO.supports(url)) {
     // Start the position save, then close in this same event callback. Chrome
     // does not reliably honor window.close() after an asynchronous wait.
+    digestGeneration += 1;
+    tabCheckGeneration += 1;
     void saveCurrentTranscriptViewState();
     window.close();
     return;
   }
 
   const newVideoId = extractVideoId(url);
+  if (newVideoId !== currentVideoId) { digestGeneration += 1; tabCheckGeneration += 1; }
   // Refresh when the video changed, or when we're not currently showing
   // results (e.g. user went home, then clicked back into the same video).
   if (newVideoId !== currentVideoId || !panelIsShowingResults()) {
@@ -405,9 +410,7 @@ function setupEventListeners() {
       errorAction();
       return;
     }
-    if (currentVideoId) {
-      startDigest(currentVideoId, currentVideoUrl);
-    }
+    checkCurrentTab();
   });
 
   document.getElementById("settingsBtn")?.addEventListener("click", () => {
@@ -473,14 +476,14 @@ function setNotesFilter(showAll) {
 // ============================================================
 
 async function checkCurrentTab() {
+  const checkGeneration = ++tabCheckGeneration;
   try {
     // The panel belongs only to the active tab. Looking for another open
     // YouTube tab here can keep an old transcript visible on a non-YouTube
     // page, so never fall back to background tabs.
-    const tabs = await chrome.tabs.query({
-      active: true,
-      lastFocusedWindow: true,
-    });
+    const windowId = panelWindowId ?? (await chrome.windows.getCurrent()).id;
+    const tabs = await chrome.tabs.query({active: true, windowId});
+    if (checkGeneration !== tabCheckGeneration) return;
     const tab = tabs[0] || null;
 
     debugLog("[YouTube Digest Panel] Found tab:", tab?.id, tab?.url);
@@ -490,7 +493,7 @@ async function checkCurrentTab() {
       return;
     }
 
-    if (!tab.url.startsWith("https://www.youtube.com")) {
+    if (!DIGEST_VIDEO.supports(tab.url)) {
       handleFrontTabUrl(tab.url);
       return;
     }
@@ -502,14 +505,21 @@ async function checkCurrentTab() {
 
     if (videoId) {
       currentVideoUrl = tab.url;
+      currentVideoTitle = "";
+      currentChannelName = "";
+      currentVideoDescription = "";
+      currentVideoDuration = 0;
 
       try {
         // Route through background script for reliable message passing
         const result = await chrome.runtime.sendMessage({
           action: "relayToContent",
+          tabId: youtubeTabId,
           payload: { action: "getVideoInfo" },
+          videoId,
         });
         debugLog("[YouTube Digest Panel] getVideoInfo result:", result);
+        if (checkGeneration !== tabCheckGeneration) return;
         if (result.success && result.response) {
           currentVideoTitle = result.response.title || "";
           currentChannelName = result.response.channelName || "";
@@ -517,6 +527,7 @@ async function checkCurrentTab() {
           currentVideoDuration = result.response.duration || 0;
         }
       } catch (e) {
+        if (checkGeneration !== tabCheckGeneration) return;
         console.error("[YouTube Digest Panel] getVideoInfo error:", e);
         currentVideoTitle = "";
         currentChannelName = "";
@@ -524,7 +535,8 @@ async function checkCurrentTab() {
         currentVideoDuration = 0;
       }
 
-      startDigest(videoId, tab.url);
+      if (checkGeneration !== tabCheckGeneration) return;
+      await startDigest(videoId, tab.url);
     } else {
       showState("welcome");
     }
@@ -535,28 +547,7 @@ async function checkCurrentTab() {
 }
 
 function extractVideoId(url) {
-  try {
-    const urlObj = new URL(url);
-
-    if (
-      urlObj.hostname.includes("youtube.com") &&
-      urlObj.searchParams.has("v")
-    ) {
-      return urlObj.searchParams.get("v");
-    }
-
-    if (urlObj.hostname === "youtu.be") {
-      return urlObj.pathname.slice(1);
-    }
-
-    if (urlObj.pathname.startsWith("/embed/")) {
-      return urlObj.pathname.split("/")[2];
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return DIGEST_VIDEO.parse(url)?.id || null;
 }
 
 // ============================================================
@@ -564,6 +555,7 @@ function extractVideoId(url) {
 // ============================================================
 
 async function startDigest(videoId, videoUrl) {
+  const generation = ++digestGeneration;
   // Check if we already have this video loaded in memory
   if (videoId === currentVideoId && currentAnalysis) {
     showState("results");
@@ -579,10 +571,15 @@ async function startDigest(videoId, videoUrl) {
     transcriptScrollObserver = null;
     resetTranscriptSearch();
     lastTranscriptScrollTop = 0;
-    pendingTranscriptViewState = await loadTranscriptViewState(videoId);
+    const nextViewState = await loadTranscriptViewState(videoId);
+    if (generation !== digestGeneration) return;
     // An unseen video always starts in Original, so opening it never spends
     // translation tokens. A saved choice is restored only for this video.
-    currentTranscriptMode = await loadDisplayLanguageMode(videoId);
+    const nextDisplayMode = await loadDisplayLanguageMode(videoId);
+    if (generation !== digestGeneration) return;
+    pendingTranscriptViewState = nextViewState;
+    transcriptReadingLayout = nextViewState?.layout || 'paragraph';
+    currentTranscriptMode = nextDisplayMode;
     document
       .getElementById("contentArea")
       ?.classList.toggle(
@@ -593,6 +590,7 @@ async function startDigest(videoId, videoUrl) {
 
   // Check cache for this video
   const cached = await loadFromCache(videoId);
+  if (generation !== digestGeneration) return;
   if (cached) {
     debugLog("Loading from cache:", videoId);
     currentVideoId = videoId;
@@ -602,6 +600,8 @@ async function startDigest(videoId, videoUrl) {
     currentTranscriptText = cached.transcriptText;
     currentTranscriptTimestamped = cached.transcriptTimestamped;
     currentTranscriptLanguage = cached.transcriptLanguage || null;
+    currentTranscriptSource = cached.source || null;
+    currentTranscriptTracks = cached.tracks || [];
     isAnalysisLoading = false;
 
     // Restore semantic-segment translations from persistent storage.
@@ -652,6 +652,7 @@ async function startDigest(videoId, videoUrl) {
   currentTranscriptText = null;
   currentTranscriptTimestamped = null;
   currentTranscriptLanguage = null;
+  currentTranscriptSource = null;
   isAnalysisLoading = false;
 
   if (currentVideoTitle || currentChannelName) {
@@ -664,12 +665,20 @@ async function startDigest(videoId, videoUrl) {
   showState("loading");
   updateLoading("Fetching transcript", "");
 
-  const transcriptResult = await chrome.runtime.sendMessage({
-    action: "fetchTranscript",
-    videoId: videoId,
-  });
+  let transcriptResult;
+  try {
+    transcriptResult = await chrome.runtime.sendMessage({
+      action: "fetchTranscript", tabId: youtubeTabId, videoId,
+    });
+  } catch (error) {
+    if (generation !== digestGeneration) return;
+    showError('插件连接中断', '请关闭并重新打开侧栏后重试。\n' + String(error.message || '').slice(0, 300));
+    return;
+  }
 
-  if (!transcriptResult.success) {
+  if (generation !== digestGeneration) return;
+  if (!transcriptResult?.success) {
+    transcriptResult ||= { error: 'BILI_PAGE_CONNECTION', message: '插件未收到读取结果，请重试。' };
     if (transcriptResult.error === "NO_SUPADATA_KEY") {
       showError(
         "API key missing",
@@ -677,13 +686,49 @@ async function startDigest(videoId, videoUrl) {
       );
       return;
     }
-    showError(
-      "No transcript found",
-      transcriptResult.message || transcriptResult.error,
-    );
+    const errorTitles = {
+      BILI_PAGE_CONNECTION: '无法连接视频页面', BILI_PAGE_PERMISSION: '无法访问视频页面',
+      VIDEO_CHANGED: '视频页面已变化', BILI_NO_SUBTITLE: '平台未返回可读字幕',
+      BILI_FETCH_FAILED: '字幕请求失败', BILI_PLAYER_UNAVAILABLE: '无法读取字幕信息',
+      BILI_IDENTITY_MISMATCH: '字幕来源不匹配',
+      BILI_SERVICE_PERMISSION: '需要允许字幕服务访问', BILI_NETWORK_ERROR: '无法连接字幕服务',
+      BILI_NEED_LOGIN: '需要登录 B 站', NEED_LOGIN: '需要登录 B 站',
+      RISK_CONTROL: 'B 站暂时限制了请求', FORBIDDEN: '无法访问这条字幕',
+      VIDEO_UNAVAILABLE: '视频不可用', SUBTITLE_DOWNLOAD_FAILED: '字幕下载失败',
+    };
+    const title = errorTitles[transcriptResult.error] || '未能读取字幕';
+    const diagnostic = transcriptResult.detail ? `\n\n错误代码：${transcriptResult.error}\n浏览器提示：${transcriptResult.detail}` : '';
+    showError(title, (transcriptResult.message || transcriptResult.error) + diagnostic);
+    if (transcriptResult.error === 'BILI_SERVICE_PERMISSION') {
+      document.getElementById('errorBtn').textContent = '允许 B 站字幕服务';
+      errorAction = async () => {
+        try {
+          const granted = await chrome.permissions.request({origins: DIGEST_VIDEO.BILI_SERVICE_ORIGINS});
+          if (granted) await checkCurrentTab();
+          else document.getElementById('errorMessage').textContent = '尚未获得 B 站字幕服务的访问权限。你可以再次点击按钮授权后重试。';
+        } catch {
+          document.getElementById('errorMessage').textContent = '浏览器未允许授权。请在扩展详情中允许访问 B 站和字幕服务后，刷新视频页面。';
+        }
+      };
+    }
     return;
   }
 
+  if (transcriptResult.info) {
+    currentVideoTitle = transcriptResult.info.title || currentVideoTitle;
+    currentChannelName = transcriptResult.info.channelName || currentChannelName;
+    currentVideoDuration = transcriptResult.info.duration || currentVideoDuration;
+    currentVideoDescription = transcriptResult.info.description || currentVideoDescription;
+    document.getElementById("videoTitle").textContent = currentVideoTitle;
+    document.getElementById("videoChannel").textContent = currentChannelName;
+    document.getElementById("videoInfo").style.display = "block";
+  }
+  if (!DIGEST_VIDEO.validTranscriptSource(videoId, transcriptResult.source)) {
+    showError("字幕来源校验失败", "字幕与当前视频不匹配，已停止显示，请重试。");
+    return;
+  }
+  currentTranscriptSource = transcriptResult.source || null;
+  currentTranscriptTracks = transcriptResult.tracks || [];
   currentTranscript = transcriptResult.transcript;
   currentTranscriptText = transcriptResult.transcriptText;
   currentTranscriptTimestamped = transcriptResult.transcriptTextTimestamped;
@@ -726,6 +771,7 @@ function getInterfaceTranslation(surface, id, text) {
 function renderLocalizedContent(text, surface, id) {
   const original = String(text || "");
   if (!original) return "";
+  if (surface === "notes") return escapeHtml(original);
   const cacheKey = interfaceTranslationCacheKey(surface, id, original);
   const translated = getInterfaceTranslation(surface, id, original);
   if (currentTranscriptMode === "original") return escapeHtml(original);
@@ -743,6 +789,7 @@ function renderLocalizedContent(text, surface, id) {
 
 function getLocalizedPlainText(text, surface, id) {
   const original = String(text || "");
+  if (surface === "notes") return original;
   const translated = getInterfaceTranslation(surface, id, original);
   if (currentTranscriptMode === "zh") return translated || original;
   if (currentTranscriptMode === "bilingual" && translated) {
@@ -990,6 +1037,7 @@ async function saveQuoteAsNote(quote, btn) {
       action: "saveNote",
       videoId: currentVideoId,
       timestamp: quote.timestampSeconds,
+      selectedText: quote.quote,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
     });
@@ -1178,6 +1226,34 @@ function markTranscriptTextNode(textNode, query) {
   return marks;
 }
 
+// One visible phrase may cross subtitle or inline-formatting boundaries.
+// Keep its fragments grouped as one search result without flattening timed DOM.
+function markTranscriptTextNodes(nodes, query) {
+  const text = nodes.map(node => node.nodeValue).join('');
+  const ranges = findLiteralTranscriptMatches(text, query);
+  const groups = ranges.map(() => []);
+  let offset = 0;
+  for (const node of nodes) {
+    const value = node.nodeValue, end = offset + value.length;
+    const overlaps = ranges.map((range, index) => ({start: Math.max(offset, range.start) - offset,
+      end: Math.min(end, range.end) - offset, index})).filter(range => range.end > range.start);
+    if (overlaps.length) {
+      const fragment = document.createDocumentFragment();
+      let cursor = 0;
+      for (const range of overlaps) {
+        fragment.append(document.createTextNode(value.slice(cursor, range.start)));
+        const mark = document.createElement('mark');
+        mark.className = 'transcript-search-highlight'; mark.textContent = value.slice(range.start, range.end);
+        groups[range.index].push(mark); fragment.append(mark); cursor = range.end;
+      }
+      fragment.append(document.createTextNode(value.slice(cursor)));
+      node.replaceWith(fragment);
+    }
+    offset = end;
+  }
+  return groups.filter(group => group.length).map(group => { group[0].searchFragments = group; return group[0]; });
+}
+
 /**
  * Updates the result count and navigation buttons from the current search
  * state. The live output gives the same information to screen reader users.
@@ -1204,7 +1280,7 @@ function updateTranscriptSearchControls(query) {
  * following, so playback cannot pull the user away from the result they found.
  */
 function revealCurrentTranscriptSearchMatch({ scroll = true } = {}) {
-  transcriptSearchMatches.forEach((mark) => mark.classList.remove("current"));
+  transcriptSearchMatches.forEach((mark) => (mark.searchFragments || [mark]).forEach(part => part.classList.remove('current')));
   document
     .querySelectorAll("#transcriptList .transcript-entry.search-current")
     .forEach((row) => row.classList.remove("search-current"));
@@ -1212,8 +1288,10 @@ function revealCurrentTranscriptSearchMatch({ scroll = true } = {}) {
   const mark = transcriptSearchMatches[transcriptSearchIndex];
   if (!mark) return;
 
-  mark.classList.add("current");
-  mark.closest(".transcript-entry")?.classList.add("search-current");
+  (mark.searchFragments || [mark]).forEach(part => {
+    part.classList.add('current');
+    part.closest('.transcript-entry')?.classList.add('search-current');
+  });
 
   if (!scroll) return;
   if (autoScrollInterval) {
@@ -1244,10 +1322,12 @@ function refreshTranscriptSearch({ preserveIndex = false, scroll = true } = {}) 
     return;
   }
 
+  const paragraphSearch = currentTranscriptMode === 'original' &&
+    document.getElementById('transcriptList')?.classList.contains('paragraph-mode');
   document
-    .querySelectorAll("#transcriptList .transcript-entry")
+    .querySelectorAll(paragraphSearch ? '#transcriptList .reading-paragraph-copy' : '#transcriptList .transcript-entry')
     .forEach((row) => {
-      const content = row.querySelector(".transcript-text, .transcript-copy");
+      const content = paragraphSearch ? row : row.querySelector(".transcript-text, .transcript-copy");
       if (!content) return;
 
       const textNodes = [];
@@ -1257,7 +1337,7 @@ function refreshTranscriptSearch({ preserveIndex = false, scroll = true } = {}) 
         {
           acceptNode(node) {
             const parent = node.parentElement;
-            if (!node.nodeValue || parent?.closest("button")) {
+            if (!node.nodeValue || parent?.closest("button, .transcript-time")) {
               return NodeFilter.FILTER_REJECT;
             }
             return NodeFilter.FILTER_ACCEPT;
@@ -1265,9 +1345,7 @@ function refreshTranscriptSearch({ preserveIndex = false, scroll = true } = {}) 
         },
       );
       while (walker.nextNode()) textNodes.push(walker.currentNode);
-      textNodes.forEach((node) => {
-        transcriptSearchMatches.push(...markTranscriptTextNode(node, query));
-      });
+      transcriptSearchMatches.push(...markTranscriptTextNodes(textNodes, query));
     });
 
   if (transcriptSearchMatches.length) {
@@ -1351,7 +1429,7 @@ function copyTranscript() {
 
 function exportTranscript() {
   const transcriptContent = getDisplayedTranscriptText();
-  const videoUrl = `https://youtube.com/watch?v=${currentVideoId}`;
+  const videoUrl = DIGEST_VIDEO.url(currentVideoId);
 
   let exportText = "";
   exportText += `TRANSCRIPT\n`;
@@ -1414,7 +1492,7 @@ function showError(title, message) {
   showState("error");
   document.getElementById("errorTitle").textContent = title;
   document.getElementById("errorMessage").textContent = message;
-  document.getElementById("errorBtn").textContent = "Try Again";
+  document.getElementById("errorBtn").textContent = "重试";
 }
 
 function showConfigError(configStatus) {
@@ -1480,9 +1558,7 @@ function switchTab(tabName) {
   // Translate only the visible tab. This prevents hidden surfaces from using
   // tokens or competing with the batch queue the user is waiting for.
   if (tabName === "overview") {
-    if (!currentAnalysis && !isAnalysisLoading) {
-      triggerAnalysis();
-    } else if (currentAnalysis && currentTranscriptMode !== "original") {
+    if (currentAnalysis && currentTranscriptMode !== "original") {
       void translateOverviewContent();
     }
   } else if (
@@ -1508,6 +1584,8 @@ async function triggerAnalysis() {
     return;
 
   isAnalysisLoading = true;
+  const analysisVideoId = currentVideoId;
+  const analysisGeneration = digestGeneration;
 
   // Show loading indicators in the Overview tab
   const chapterList = document.getElementById("chapterList");
@@ -1530,6 +1608,7 @@ async function triggerAnalysis() {
       videoDuration: currentVideoDuration,
     });
 
+    if (analysisVideoId !== currentVideoId || analysisGeneration !== digestGeneration) return;
     if (!analysisResult.success) {
       if (chapterList)
         chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">Analysis failed: ${escapeHtml(analysisResult.error || "Unknown error")}</li>`;
@@ -1544,6 +1623,7 @@ async function triggerAnalysis() {
     // Save to cache now that we have analysis
     await saveToCache(currentVideoId);
   } catch (error) {
+    if (analysisVideoId !== currentVideoId || analysisGeneration !== digestGeneration) return;
     console.error("[YouTube Digest Panel] Analysis error:", error);
     if (chapterList)
       chapterList.innerHTML = `<li class="chapter-item" style="color: var(--accent); border: none;">Error: ${escapeHtml(error.message)}</li>`;
@@ -1565,14 +1645,18 @@ async function seekTo(seconds) {
 
   const payload = {
     action: "seekTo",
+    videoId: currentVideoId,
     seconds: Number(seconds),
   };
 
   try {
-    // Try direct messaging to the stored YouTube tab first (fastest/reliable)
+    const activeVideoTab = await chrome.tabs.get(youtubeTabId);
+    if (DIGEST_VIDEO.parse(activeVideoTab.url)?.id !== currentVideoId) return;
+    // Try direct messaging to the stored video tab first.
     if (youtubeTabId) {
       try {
-        await chrome.tabs.sendMessage(youtubeTabId, payload);
+        const response = await chrome.tabs.sendMessage(youtubeTabId, payload);
+        if (response?.success === false) return;
         debugLog("[YouTube Digest Panel] seekTo direct success");
         return;
       } catch (directErr) {
@@ -1586,6 +1670,8 @@ async function seekTo(seconds) {
     // Fallback: route through background script
     const result = await chrome.runtime.sendMessage({
       action: "relayToContent",
+      tabId: youtubeTabId,
+      videoId: currentVideoId,
       payload,
     });
     debugLog("[YouTube Digest Panel] seekTo relay result:", result);
@@ -1617,6 +1703,7 @@ async function highlightMomentsOnPage(moments) {
     // Route through background script for reliable message passing
     await chrome.runtime.sendMessage({
       action: "relayToContent",
+      tabId: youtubeTabId,
       payload: {
         action: "highlightMoments",
         moments: moments,
@@ -1971,6 +2058,8 @@ async function saveToCache(videoId) {
       transcriptText: currentTranscriptText,
       transcriptTimestamped: currentTranscriptTimestamped,
       transcriptLanguage: currentTranscriptLanguage,
+      source: currentTranscriptSource,
+      tracks: currentTranscriptTracks,
       videoTitle: currentVideoTitle,
       channelName: currentChannelName,
       paragraphCache: paragraphCacheForVideo,
@@ -2046,6 +2135,9 @@ async function loadFromCache(videoId) {
     const cached = result[`digest_${videoId}`];
 
     if (!cached) return null;
+    // Ignore unverified 1.3.0 captions and derived summaries/translations.
+    // Keep existing notes and stored data intact; a successful fetch replaces the cache.
+    if (!DIGEST_VIDEO.validTranscriptSource(videoId, cached.source)) return null;
 
     // Cache expires after 30 days
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -2109,8 +2201,8 @@ function renderNotes(notes, filteredVideoId) {
   if (!notes || notes.length === 0) {
     notesIntro.style.display = "block";
     notesIntro.textContent = filteredVideoId
-      ? "No notes for this video yet. Hover over the video and click Note to save."
-      : "No notes saved yet. Hover over a video and click Note to save.";
+      ? "本视频暂无摘录。可选中字幕保存，或点击视频页的“保存摘录”。"
+      : "暂无摘录。可选中字幕，或点击视频页的“保存摘录”。";
     return;
   }
 
@@ -2127,9 +2219,9 @@ function renderNotes(notes, filteredVideoId) {
       </div>
       <div class="note-text">${renderLocalizedContent(note.text, "notes", translationId)}</div>
       <div class="note-actions">
-        <button class="note-action-btn note-copy-text">Copy text</button>
-        <button class="note-action-btn note-copy-link" data-url="${escapeHtml(note.timestampedUrl)}">Copy timestamp</button>
-        <button class="note-action-btn note-play" data-seconds="${Number(note.timestampSeconds) || 0}">Play</button>
+        <button class="note-action-btn note-copy-text">复制摘录</button>
+        <button class="note-action-btn note-copy-link" data-url="${escapeHtml(note.timestampedUrl)}">复制链接</button>
+        <button class="note-action-btn note-play" data-seconds="${Number(note.timestampSeconds) || 0}">回到视频</button>
         <button class="note-delete" data-id="${escapeHtml(note.id)}" type="button" aria-label="Delete note" title="Delete note">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 6h18"></path>
@@ -2156,7 +2248,7 @@ function renderNotes(notes, filteredVideoId) {
         loadNotes(filteredVideoId);
       });
 
-    // Copy text button — copies just the note's text
+    // 复制摘录 button — copies just the note's text
     noteEl
       .querySelector(".note-copy-text")
       .addEventListener("click", async () => {
@@ -2167,14 +2259,14 @@ function renderNotes(notes, filteredVideoId) {
           const btn = noteEl.querySelector(".note-copy-text");
           btn.textContent = "Copied";
           setTimeout(() => {
-            btn.textContent = "Copy text";
+            btn.textContent = "复制摘录";
           }, 2000);
         } catch (err) {
           console.error("Copy failed:", err);
         }
       });
 
-    // Copy timestamp button — copies the timestamped YouTube link
+    // 复制链接 button — copies the timestamped YouTube link
     noteEl
       .querySelector(".note-copy-link")
       .addEventListener("click", async () => {
@@ -2183,7 +2275,7 @@ function renderNotes(notes, filteredVideoId) {
           const btn = noteEl.querySelector(".note-copy-link");
           btn.textContent = "Copied";
           setTimeout(() => {
-            btn.textContent = "Copy timestamp";
+            btn.textContent = "复制链接";
           }, 2000);
         } catch (err) {
           console.error("Copy failed:", err);
@@ -2220,8 +2312,8 @@ async function deleteNote(noteId) {
 // ============================================================
 // AUTO-SCROLL — Follow video playback in transcript
 // ============================================================
-// While a video plays, the transcript automatically scrolls to show which
-// 30-second chunk is currently being spoken. If the user manually scrolls
+// While a video plays, the transcript highlights its current caption range.
+// If the user manually scrolls
 // (e.g., to read ahead), auto-scroll pauses and a "Follow playback" button
 // appears so they can resume it. Highlight always stays active regardless.
 
@@ -2230,10 +2322,10 @@ async function deleteNote(noteId) {
  * to the matching transcript entry.
  */
 function startPlaybackTracking() {
-  if (!currentTranscript || !currentTranscript.length) return;
+  if (!currentTranscript?.length || !transcriptTabIsActive()) return;
 
   // Don't restart if already tracking (preserves user's auto-scroll state)
-  if (autoScrollInterval) return;
+  if (autoScrollInterval) { void playbackTrackingTick(); return; }
 
   const willRestoreReadingPosition =
     pendingTranscriptViewState?.videoId === currentVideoId;
@@ -2241,13 +2333,18 @@ function startPlaybackTracking() {
   document.getElementById("followPlaybackBtn").style.display =
     willRestoreReadingPosition ? "block" : "none";
 
-  // Poll video time every 500ms
-  autoScrollInterval = setInterval(() => playbackTrackingTick(), 500);
+  setPlaybackStatus('正在同步播放位置…');
+  autoScrollInterval = setInterval(() => playbackTrackingTick(), 250);
+  void playbackTrackingTick();
 
   // Listen for manual scrolls on the content area
   const contentArea = document.getElementById("contentArea");
   contentArea.removeEventListener("scroll", onContentAreaScroll);
   contentArea.addEventListener("scroll", onContentAreaScroll);
+  contentArea.removeEventListener('wheel', pausePlaybackScroll);
+  contentArea.addEventListener('wheel', pausePlaybackScroll, {passive: true});
+  contentArea.removeEventListener('touchmove', pausePlaybackScroll);
+  contentArea.addEventListener('touchmove', pausePlaybackScroll, {passive: true});
 }
 
 /**
@@ -2255,6 +2352,9 @@ function startPlaybackTracking() {
  * starting a new digest, or leaving results state.
  */
 function stopPlaybackTracking() {
+  playbackGeneration++;
+  playbackInFlight = null;
+  playbackRetryAfter = 0;
   if (autoScrollInterval) {
     clearInterval(autoScrollInterval);
     autoScrollInterval = null;
@@ -2262,33 +2362,120 @@ function stopPlaybackTracking() {
   autoScrollEnabled = true; // Reset for next time
   lastAutoScrollTime = 0;
   document.getElementById("followPlaybackBtn").style.display = "none";
+  setPlaybackStatus('');
 
   // Remove active highlights
   document
     .querySelectorAll(".transcript-entry.active-playback")
     .forEach((el) => {
       el.classList.remove("active-playback");
+      el.removeAttribute('aria-current');
     });
 }
 
 /**
  * One tick of the playback tracker. Gets current video time from the
- * YouTube tab and highlights + scrolls to the matching transcript entry.
+ * bound video tab and highlights + scrolls to the matching transcript entry.
  */
 async function playbackTrackingTick() {
+  if (!currentVideoId || !transcriptTabIsActive() || playbackInFlight || Date.now() < playbackRetryAfter) return;
+  const request = {generation: playbackGeneration, videoId: currentVideoId, tabId: youtubeTabId};
+  playbackInFlight = request;
+  const stillCurrent = () => request.generation === playbackGeneration && request.videoId === currentVideoId &&
+    request.tabId === youtubeTabId && transcriptTabIsActive();
+  let timeout;
   try {
-    const result = await chrome.runtime.sendMessage({
-      action: "relayToContent",
-      payload: { action: "getCurrentTime" },
-    });
-
-    if (!result.success || !result.response) return;
-
-    const currentTime = result.response.currentTime || 0;
+    const result = await Promise.race([
+      DIGEST_PLAYBACK.read(request.tabId, request.videoId),
+      new Promise((_, reject) => { timeout = setTimeout(() => reject(Object.assign(new Error('播放同步超时'), {code: 'PLAYBACK_TIMEOUT'})), 4500); }),
+    ]);
+    if (!stillCurrent()) return;
+    const currentTime = result?.response?.currentTime;
+    if (!result?.success || result.response?.success === false || !Number.isFinite(currentTime) || currentTime < 0) {
+      const failure = result?.response?.success === false ? result.response : result;
+      throw Object.assign(new Error(failure?.detail || failure?.error || '播放页没有返回有效时间'), {code: failure?.error || 'PLAYER_TIME_UNAVAILABLE'});
+    }
+    const seconds = Math.floor(currentTime);
+    const stamp = typeof STUDY !== 'undefined' ? STUDY.time(seconds) : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    setPlaybackStatus(`${result.response.paused === true ? '已暂停' : '播放位置'} · ${stamp}`);
     highlightActiveEntry(currentTime);
   } catch (error) {
-    // Silently ignore — YouTube tab might be closed or navigated away
+    if (stillCurrent()) {
+      highlightActiveEntry(null);
+      showPlaybackFailure(DIGEST_PLAYBACK.classify(error), request);
+      playbackRetryAfter = Date.now() + 3000;
+    }
+  } finally {
+    clearTimeout(timeout);
+    if (playbackInFlight === request) playbackInFlight = null;
   }
+}
+
+function setPlaybackStatus(text, unavailable = false) {
+  const status = document.getElementById('playbackStatus');
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle('unavailable', unavailable);
+  const reconnect = document.getElementById('reconnectPlaybackBtn');
+  if (reconnect) reconnect.hidden = !unavailable || DIGEST_VIDEO.fromId(currentVideoId)?.platform !== 'bilibili';
+  const diagnostics = document.getElementById('playbackDiagnostics');
+  if (diagnostics) diagnostics.hidden = !unavailable;
+}
+
+function showPlaybackFailure(failure, request = {tabId: youtubeTabId, videoId: currentVideoId}) {
+  const code = failure.error || 'PLAYBACK_CONNECTION';
+  const messages = {
+    PAGE_ACCESS_REQUIRED: '尚未允许访问视频页面，请点击下方按钮授权并连接。',
+    PAGE_ACCESS_BLOCKED: '浏览器阻止了页面连接。请点击下方按钮重试，并检查扩展的 B 站访问权限。',
+    CONTENT_NOT_CONNECTED: '视频页接收器没有连接，请点击下方按钮重新连接。',
+    PLAYER_TIME_UNAVAILABLE: '已连接视频页，但没有读到播放器时间；请先开始播放，必要时刷新视频页。',
+    PLAYBACK_TIMEOUT: '视频页响应超时，请点击下方按钮重新连接。',
+    VIDEO_CHANGED: '当前视频已变化，请重新打开侧栏。',
+    VIDEO_TAB_CLOSED: '原视频标签页已关闭，请在视频页重新打开侧栏。',
+  };
+  setPlaybackStatus(`${messages[code] || '播放连接失败，请重新连接。'} [${code}]`, true);
+  const diagnostics = document.getElementById('playbackDiagnosticText');
+  if (diagnostics) diagnostics.textContent = JSON.stringify({
+    version: chrome.runtime.getManifest?.().version || 'unknown',
+    videoId: request.videoId, tabId: request.tabId, code, detail: failure.detail || '',
+  }, null, 2);
+}
+
+async function reconnectPlayback() {
+  const tabId = youtubeTabId, videoId = currentVideoId;
+  if (DIGEST_VIDEO.fromId(videoId)?.platform !== 'bilibili') return;
+  const button = document.getElementById('reconnectPlaybackBtn');
+  button.disabled = true;
+  playbackGeneration++; playbackInFlight = null; playbackRetryAfter = Infinity;
+  try {
+    // Called directly from the user's click, before any asynchronous work.
+    const granted = await chrome.permissions.request({origins: ['https://www.bilibili.com/*']});
+    if (tabId !== youtubeTabId || videoId !== currentVideoId) return;
+    if (!granted) { showPlaybackFailure({error: 'PAGE_ACCESS_REQUIRED'}); return; }
+    setPlaybackStatus('正在重新连接播放…');
+    const result = await DIGEST_PLAYBACK.bounded(chrome.runtime.sendMessage({action: 'repairPlaybackConnection', tabId, videoId}), 5000);
+    if (tabId !== youtubeTabId || videoId !== currentVideoId) return;
+    if (!result?.success) { showPlaybackFailure(DIGEST_PLAYBACK.classify(result?.error || '连接失败')); return; }
+    playbackRetryAfter = 0;
+    await playbackTrackingTick();
+  } catch (error) {
+    if (tabId === youtubeTabId && videoId === currentVideoId) showPlaybackFailure(DIGEST_PLAYBACK.classify(error));
+  } finally {
+    button.disabled = false;
+    if (playbackRetryAfter === Infinity) playbackRetryAfter = Date.now() + 3000;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('reconnectPlaybackBtn')?.addEventListener('click', reconnectPlayback);
+  const version = chrome.runtime.getManifest?.().version;
+  if (version) document.getElementById('extensionVersion').textContent = `v${version}`;
+});
+
+function pausePlaybackScroll() {
+  if (!autoScrollInterval || !transcriptTabIsActive()) return;
+  autoScrollEnabled = false;
+  document.getElementById('followPlaybackBtn').style.display = 'block';
 }
 
 /**
@@ -2325,28 +2512,35 @@ function highlightActiveEntry(currentSeconds) {
   // Find the entry whose time range contains the current playback time
   let activeEntry = null;
   entries.forEach((entry, index) => {
-    const entrySeconds = parseInt(entry.dataset.seconds);
+    const entrySeconds = Number(entry.dataset.seconds);
     const nextEntry = entries[index + 1];
     const nextSeconds = nextEntry
-      ? parseInt(nextEntry.dataset.seconds)
+      ? Number(nextEntry.dataset.seconds)
       : Infinity;
-
-    if (currentSeconds >= entrySeconds && currentSeconds < nextSeconds) {
+    const declaredEnd = Number(entry.dataset.endSeconds);
+    const endSeconds = Number.isFinite(declaredEnd) && declaredEnd > entrySeconds
+      ? Math.min(declaredEnd, nextSeconds) : nextSeconds;
+    if (Number.isFinite(currentSeconds) && currentSeconds >= entrySeconds && currentSeconds < endSeconds) {
       activeEntry = entry;
     }
   });
 
-  if (!activeEntry) return;
-
   // Skip if this entry is already highlighted (no DOM thrashing)
-  if (activeEntry.classList.contains("active-playback")) return;
+  if (activeEntry?.classList.contains("active-playback")) return;
 
   // Remove old highlight, add new one
-  entries.forEach((e) => e.classList.remove("active-playback"));
+  entries.forEach((e) => { e.classList.remove('active-playback'); e.removeAttribute('aria-current'); });
+  if (!activeEntry) return;
   activeEntry.classList.add("active-playback");
+  activeEntry.setAttribute('aria-current', 'true');
 
   // Only scroll if auto-scroll is enabled
   if (autoScrollEnabled) {
+    const area = document.getElementById('contentArea');
+    if (transcriptList.classList?.contains('paragraph-mode') && activeEntry.getBoundingClientRect && area) {
+      const rect = activeEntry.getBoundingClientRect(), viewport = area.getBoundingClientRect();
+      if (rect.top >= viewport.top + 24 && rect.bottom <= viewport.bottom - 48) return;
+    }
     lastAutoScrollTime = Date.now();
     activeEntry.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -2391,7 +2585,9 @@ async function loadTranscriptViewState(videoId) {
     const state = result?.[TRANSCRIPT_VIEW_STATE_KEY]?.[videoId];
     const scrollTop = Number(state?.scrollTop);
     if (!Number.isFinite(scrollTop) || scrollTop < 0) return null;
-    return { videoId, scrollTop };
+    // Old pixel positions were measured in the pre-paragraph layout.
+    if (!['paragraph', 'sentence'].includes(state?.layout)) return null;
+    return { videoId, scrollTop, layout: state.layout };
   } catch (error) {
     console.error("[YouTube Digest] Reading position load error:", error);
     return null;
@@ -2402,13 +2598,13 @@ async function loadTranscriptViewState(videoId) {
  * Stores positions for a small recent set of videos. This prevents one value
  * from growing without a limit during a long Chrome session.
  */
-async function saveTranscriptViewState(videoId, scrollTop) {
+async function saveTranscriptViewState(videoId, scrollTop, layout = transcriptReadingLayout) {
   if (!videoId || !Number.isFinite(scrollTop) || scrollTop < 0) return;
   try {
     const storage = getTranscriptViewStateStorage();
     const result = await storage.get(TRANSCRIPT_VIEW_STATE_KEY);
     const states = result?.[TRANSCRIPT_VIEW_STATE_KEY] || {};
-    states[videoId] = { scrollTop, updatedAt: Date.now() };
+    states[videoId] = { scrollTop, layout, updatedAt: Date.now() };
 
     const recentStates = Object.fromEntries(
       Object.entries(states)
@@ -2438,10 +2634,11 @@ function scheduleTranscriptViewStateSave() {
 
   const videoId = currentVideoId;
   const scrollTop = contentArea.scrollTop;
+  const layout = transcriptReadingLayout;
   lastTranscriptScrollTop = scrollTop;
   clearTimeout(transcriptViewStateSaveTimer);
   transcriptViewStateSaveTimer = setTimeout(() => {
-    void saveTranscriptViewState(videoId, scrollTop);
+    void saveTranscriptViewState(videoId, scrollTop, layout);
   }, 150);
 }
 
@@ -2568,6 +2765,7 @@ async function handleDisplayLanguageModeChange(mode) {
   if (!DISPLAY_LANGUAGE_MODES.has(mode)) return;
   if (mode === currentTranscriptMode) return;
 
+  if (typeof studyState !== "undefined" && studyState.busy) return;
   currentTranscriptMode = mode;
   await saveDisplayLanguageMode(currentVideoId, mode);
   if (mode !== "original") interfaceTranslationFailures.clear();
@@ -2604,6 +2802,7 @@ async function handleDisplayLanguageModeChange(mode) {
 
 function renderTranscriptSegmentContent(segment, mode, translated, error) {
   const original = renderSubtitleInlineMarkup(segment.text);
+  if (mode === "original") return `<span class="transcript-text">${original}</span>`;
   let translationHtml = "";
   if (translated) {
     translationHtml = renderSubtitleInlineMarkup(translated);
@@ -2620,6 +2819,65 @@ function renderTranscriptSegmentContent(segment, mode, translated, error) {
   return `<span class="transcript-copy"><span class="transcript-translation ${translated ? "" : error ? "translation-error" : "translation-pending"}">${translationHtml}</span></span>`;
 }
 
+let transcriptReadingLayout = 'paragraph';
+let transcriptLayoutSegments = [];
+
+function layoutTranscriptRows(segments, rows) {
+  const list = document.getElementById('transcriptList');
+  const grouped = transcriptReadingLayout === 'paragraph' && typeof STUDY !== 'undefined';
+  list.classList.toggle('paragraph-mode', grouped);
+  list.classList.toggle('bilingual-reading', currentTranscriptMode === 'bilingual');
+  const fragment = document.createDocumentFragment();
+  if (grouped) {
+    let index = 0;
+    for (const group of STUDY.readingParagraphs(segments)) {
+      const paragraph = document.createElement('div');
+      paragraph.className = 'reading-paragraph';
+      const stamp = document.createElement('button');
+      stamp.type = 'button'; stamp.className = 'paragraph-time';
+      stamp.textContent = STUDY.time(group[0].start);
+      stamp.setAttribute('aria-label', `跳转到 ${stamp.textContent}`);
+      stamp.addEventListener('click', event => seekFromTranscriptEntryClick(event, group[0].start));
+      const copy = document.createElement('div'); copy.className = 'reading-paragraph-copy';
+      group.forEach((segment, i) => {
+        if (i) copy.append(document.createTextNode(STUDY.readingSeparator(group[i - 1].text, segment.text)));
+        copy.append(rows[index++]);
+      });
+      paragraph.append(stamp, copy); fragment.append(paragraph);
+    }
+  } else rows.forEach(row => fragment.append(row));
+  list.replaceChildren(fragment);
+  document.querySelectorAll('[data-reading-layout]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.readingLayout === transcriptReadingLayout));
+  });
+}
+
+function setTranscriptReadingLayout(layout) {
+  if (!['paragraph', 'sentence'].includes(layout) || layout === transcriptReadingLayout) return;
+  const list = document.getElementById('transcriptList'), area = document.getElementById('contentArea');
+  const rows = Array.from(list.querySelectorAll('.transcript-entry'));
+  const bounds = area.getBoundingClientRect();
+  const visibleTop = Math.max(bounds.top, document.querySelector('.transcript-layout-controls')?.getBoundingClientRect().bottom || 0);
+  const anchor = rows.find(row => { const rect = row.getBoundingClientRect(); return rect.bottom > visibleTop + 1 && rect.top < bounds.bottom; });
+  const offset = anchor ? anchor.getBoundingClientRect().top - bounds.top : 0;
+  const scrollTop = area.scrollTop;
+  transcriptReadingLayout = layout;
+  // Move existing nodes: keep the current highlight, search marks, event
+  // listeners and translation work. A layout change never starts an AI task.
+  lastAutoScrollTime = Date.now();
+  layoutTranscriptRows(transcriptLayoutSegments, rows);
+  refreshTranscriptSearch({preserveIndex: true, scroll: false});
+  area.scrollTop = anchor ? area.scrollTop + anchor.getBoundingClientRect().top - bounds.top - offset : scrollTop;
+  lastTranscriptScrollTop = area.scrollTop;
+  scheduleTranscriptViewStateSave();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-reading-layout]').forEach(button => {
+    button.addEventListener('click', () => setTranscriptReadingLayout(button.dataset.readingLayout));
+  });
+});
+
 function renderTranscriptModeRows(segments, mode) {
   const transcriptList = document.getElementById("transcriptList");
   if (!transcriptList) return [];
@@ -2634,24 +2892,33 @@ function renderTranscriptModeRows(segments, mode) {
     const cached = transcriptParagraphCache.get(
       transcriptTranslationCacheKey(segment),
     );
-    div.className = `transcript-entry ${cached ? "translated" : "translating"}`;
+    div.className = `transcript-entry ${mode === "original" ? "" : cached ? "translated" : "translating"}`;
     div.dataset.seconds = segment.start;
+    if (Number.isFinite(segment.end)) div.dataset.endSeconds = segment.end;
     div.dataset.segmentId = segment.id;
     div.dataset.segmentIndex = index;
 
     const minutes = Math.floor(segment.start / 60);
     const seconds = Math.floor(segment.start % 60);
-    const timestamp = `${minutes}:${String(seconds).padStart(2, "0")}`;
-    div.innerHTML = `
-      <span class="transcript-time">${timestamp}</span>
-      ${renderTranscriptSegmentContent(segment, mode, cached, "")}
-    `;
+    const timestamp = typeof STUDY !== "undefined" ? STUDY.time(segment.start) : `${minutes}:${String(seconds).padStart(2, "0")}`;
+    div.title = `跳转到 ${timestamp}`;
+    div.tabIndex = 0;
+    div.setAttribute('role', 'button');
+    div.innerHTML = `<span class="transcript-time">${timestamp}</span>${renderTranscriptSegmentContent(segment, mode, cached, "")}`;
     div.addEventListener("click", (event) =>
       seekFromTranscriptEntryClick(event, segment.start),
     );
+    div.addEventListener('keydown', event => {
+      if (event.target === div && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault(); seekFromTranscriptEntryClick(event, segment.start);
+      }
+    });
     transcriptList.appendChild(div);
     rows.push(div);
   });
+
+  transcriptLayoutSegments = segments;
+  layoutTranscriptRows(segments, rows);
 
   // Bilingual mode can find source text before each translation arrives.
   refreshTranscriptSearch({ preserveIndex: false, scroll: false });
@@ -2772,6 +3039,7 @@ async function requestTranscriptTranslationBatch(
     });
     refreshTranscriptSearch({ preserveIndex: true, scroll: false });
     await updateCache();
+    return { success: !!result?.success, error: result?.error };
   } catch (error) {
     if (generation !== translationGeneration) return;
     sourceBatch.forEach((segment, batchIndex) => {
@@ -2783,6 +3051,7 @@ async function requestTranscriptTranslationBatch(
       );
     });
     refreshTranscriptSearch({ preserveIndex: true, scroll: false });
+    return { success: false, error: error.message };
   } finally {
     setTranslatingSpinner(false);
   }

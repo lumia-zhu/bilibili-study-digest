@@ -17,6 +17,7 @@ function loadSidepanelHelpers({
   const localStorage = {};
   const sandbox = {
     console,
+    DIGEST_VIDEO: require("../platforms.js"),
     URL,
     TextDecoder,
     TextEncoder,
@@ -89,6 +90,7 @@ function loadBackgroundHelpers({
   const localStorage = { ytd_settings: settings };
   const sandbox = {
     console,
+    DIGEST_VIDEO: require("../platforms.js"),
     URL,
     TextDecoder,
     TextEncoder,
@@ -130,7 +132,7 @@ function loadBackgroundHelpers({
     YTD_SETTINGS: {
       STORAGE_KEY: "ytd_settings",
       normalize: (value) => value,
-      chatCompletionsUrl: (baseUrl) => `${baseUrl}/chat/completions`,
+      chatCompletionsUrl: (settings) => `${settings.aiBaseUrl}/chat/completions`,
       canonicalYouTubeUrl: (videoId) =>
         `https://www.youtube.com/watch?v=${videoId}`,
     },
@@ -239,7 +241,7 @@ test("the header exposes one universal language control for all result tabs", ()
   const js = read("sidepanel.js");
   assert.match(html, /id="transcriptModeControl"[\s\S]*aria-label="Content language"/);
   assert.match(html, /id="transcriptModeControl"[\s\S]*id="tabsNav"/);
-  assert.match(html, /data-transcript-mode="original"[\s\S]*?>Original</);
+  assert.match(html, /data-transcript-mode="original"[\s\S]*?>原文</);
   assert.match(html, /data-transcript-mode="zh"[\s\S]*?>\u4e2d\u6587</);
   assert.match(html, /data-transcript-mode="bilingual"[\s\S]*?>\u53cc\u8bed</);
   assert.match(js, /handleDisplayLanguageModeChange\(button\.dataset\.transcriptMode\)/);
@@ -297,6 +299,11 @@ test("transcript reading position survives a side panel close", async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(restored)), {
     videoId: "video-a",
     scrollTop: 427.5,
+    layout: 'paragraph',
+  });
+  await saveTranscriptViewState('video-a', 612, 'sentence');
+  assert.deepEqual(JSON.parse(JSON.stringify(await loadTranscriptViewState('video-a'))), {
+    videoId: 'video-a', scrollTop: 612, layout: 'sentence',
   });
 });
 
@@ -525,6 +532,15 @@ test("all AI product requests use DeepSeek non-thinking and JSON behavior", asyn
   }
 });
 
+test('custom provider uses its configured endpoint without DeepSeek-only fields', async () => {
+  let calledUrl,body;
+  const helper=loadBackgroundHelpers({settings:{schemaVersion:2,aiApiKey:'test-key',aiBaseUrl:'https://model.example/v1',aiModel:'model-x'},fetchImpl:async(url,options)=>{
+    calledUrl=url;body=JSON.parse(options.body);return {ok:true,json:async()=>({choices:[{message:{content:'OK'}}]})};
+  }});
+  await helper.requestAiCompletion({messages:[{role:'user',content:'test'}],maxTokens:8});
+  assert.equal(calledUrl,'https://model.example/v1/chat/completions');assert.equal(body.model,'model-x');assert.equal(body.thinking,undefined);
+});
+
 test("blank-line chunks reset provider idle timeout and valid JSON succeeds", async () => {
   const timers = createFakeTimers();
   const helpers = loadBackgroundHelpers({
@@ -743,7 +759,7 @@ test("translation message watchdog rejects, clears its timer, and ignores late r
   });
   assert.equal(timeoutDelay, 130_000);
   timeoutCallback();
-  await assert.rejects(request, /timed out after 130 seconds.*Retry/i);
+  await assert.rejects(request, /130 秒.*重试/);
   assert.equal(clearCount, 1);
 
   resolveMessage({ success: true });

@@ -1,17 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Digest",
-  "version": "1.2.0",
+  "name": "B 站学习 Digest",
+  "version": "0.1.5",
   "minimum_chrome_version": "116",
-  "description": "Turn YouTube videos into learning resources with transcripts, bilingual translation, AI overviews, and notes.",
-  "permissions": ["sidePanel", "storage", "tabs", "scripting"],
+  "description": "原始字幕阅读、按需 AI 整理、完整章节概览与时间戳摘录。基于 YouTube Digest 的社区版本。",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://api.supadata.ai/*",
-    "https://api.deepseek.com/*"
+    "https://api.deepseek.com/*",
+    "https://www.bilibili.com/*",
+    "https://api.bilibili.com/*",
+    "https://aisubtitle.hdslb.com/*",
+    "https://i0.hdslb.com/*",
+    "https://i1.hdslb.com/*",
+    "https://i2.hdslb.com/*",
+    "https://subtitle.bilibili.com/*"
   ],
   "action": {
-    "default_title": "Open YouTube Digest",
+    "default_title": "打开 B 站学习 Digest",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -30,8 +42,22 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.bilibili.com/*"
+      ],
+      "js": [
+        "platforms.js",
+        "bilibili-content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -39,5 +65,10 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ]
 }

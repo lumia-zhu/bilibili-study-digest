@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Digest Settings</title>
+    <title>Video Digest Settings</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main class="settings-shell">
       <header>
         <div class="settings-heading-row">
-          <div class="eyebrow">YouTube Digest</div>
+          <div class="eyebrow">Video Digest · YouTube + B站</div>
           <div
             class="language-switch"
             role="group"
@@ -43,6 +43,7 @@
         </p>
       </header>
 
+      <p class="help">B 站字幕可直接使用，无需 Supadata Key。摘要、翻译及 AI 解释需要 DeepSeek Key。登录状态仅在 B 站页面内使用。</p>
       <form id="settingsForm">
         <section class="card">
           <h2 data-i18n="transcriptProvider">Transcript provider</h2>
@@ -86,6 +87,11 @@
             >
           </div>
 
+          <details class="advanced-settings"><summary>高级：模型与服务地址</summary>
+            <label for="aiBaseUrl">API Base URL（兼容 Chat Completions）</label><input id="aiBaseUrl" type="url" placeholder="https://api.deepseek.com" />
+            <label for="aiModel">模型名称</label><input id="aiModel" type="text" placeholder="deepseek-v4-flash" />
+            <p class="help">切换服务时请重新确认密钥。保存时只申请你填写的服务域名权限。</p>
+          </details>
           <label for="aiApiKey" data-i18n="deepseekApiKeyLabel"
             >DeepSeek API key</label
           >
@@ -117,6 +123,8 @@
           </div>
         </section>
 
+        <div class="form-actions"><button id="testConnectionBtn" type="button">测试已保存连接（少量调用）</button>
+          <span id="connectionStatus" role="status"></span></div>
         <div class="form-actions">
           <button class="primary" type="submit" data-i18n="saveSettings">
             Save settings
@@ -125,7 +133,7 @@
         </div>
       </form>
 
-      <details class="card customization-card">
+      <details class="card customization-card" hidden>
         <summary class="customization-summary">
           <span class="customization-summary-copy">
             <span class="eyebrow" data-i18n="localRemix">Local remix</span>

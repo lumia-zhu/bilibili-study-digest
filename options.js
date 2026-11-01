@@ -5,27 +5,27 @@ const YTD_OPTIONS = (() => {
 
   const COPY = {
     en: {
-      pageTitle: "YouTube Digest Settings",
+      pageTitle: "Bilibili Study Digest Settings",
       languageGroupLabel: "Interface language",
       heading: "Bring your own API keys",
       lede:
-        "Keys stay in this Chrome profile and are sent only to Supadata and DeepSeek. This open-source extension has no developer server or analytics.",
+        "Keys stay in this Chrome profile and are sent only to the configured provider (and Supadata for YouTube captions). This open-source extension has no developer server or analytics.",
       transcriptProvider: "Transcript provider",
       supadataApiKeyLabel: "Supadata API key",
-      supadataHelp: "Used to fetch timestamped YouTube subtitles. ",
+      supadataHelp: "Only needed for YouTube subtitles. Bilibili reads its own subtitles without this key. ",
       supadataLink: "Create a Supadata account and key",
       supadataHelpSuffix:
         ". Supadata generates the key during onboarding.",
       aiProvider: "AI provider",
       providerSummaryLabel: "Supported AI provider",
       providerBadge: "Supported in this version",
-      deepseekApiKeyLabel: "DeepSeek API key",
+      deepseekApiKeyLabel: "AI API key",
       deepseekHelp:
-        "YouTube Digest uses DeepSeek V4 Flash for overviews, explanations, translation, and note polishing. ",
-      deepseekLink: "Create a DeepSeek API key",
+        "The default is DeepSeek. Configure a compatible endpoint and model below. AI runs only after an explicit action. ",
+      deepseekLink: "Create a AI API key",
       deepseekHelpSuffix: ".",
       privacyNote:
-        "When you use AI features, DeepSeek receives the video transcript and relevant video context. Review DeepSeek's terms and pricing before saving.",
+        "When you use AI features, the configured AI provider receives relevant transcript text and relevant video context. Review your provider's terms and pricing.",
       saveSettings: "Save settings",
       localRemix: "Local remix",
       customizationTitle: "Want to use another AI model?",
@@ -75,26 +75,26 @@ const YTD_OPTIONS = (() => {
         "Could not load saved settings. You can still preview this page.",
     },
     "zh-CN": {
-      pageTitle: "YouTube Digest 设置",
+      pageTitle: "B 站学习 Digest 设置",
       languageGroupLabel: "界面语言",
       heading: "使用你自己的 API 密钥",
       lede:
-        "密钥仅保存在当前 Chrome 个人资料中，只会发送给 Supadata 和 DeepSeek。本开源扩展没有开发者服务器，也不使用分析服务。",
+        "密钥仅保存在当前 Chrome 个人资料中，发送给你配置的服务；Supadata 仅用于 YouTube。本开源扩展没有开发者服务器，也不使用分析服务。",
       transcriptProvider: "字幕服务",
       supadataApiKeyLabel: "Supadata API 密钥",
-      supadataHelp: "用于获取带时间戳的 YouTube 字幕。",
+      supadataHelp: "仅 YouTube 字幕需要；B 站字幕无需 Supadata 密钥。",
       supadataLink: "创建 Supadata 账号并获取密钥",
       supadataHelpSuffix: "。Supadata 会在引导流程中生成密钥。",
       aiProvider: "AI 服务",
       providerSummaryLabel: "支持的 AI 服务",
       providerBadge: "当前版本支持",
-      deepseekApiKeyLabel: "DeepSeek API 密钥",
+      deepseekApiKeyLabel: "AI API 密钥",
       deepseekHelp:
-        "YouTube Digest 使用 DeepSeek V4 Flash 生成概览、解释内容、翻译字幕和润色笔记。",
-      deepseekLink: "创建 DeepSeek API 密钥",
+        "默认使用 DeepSeek，可在下方填写兼容服务地址和模型。AI 整理、概览、解释和翻译按需调用；保存摘录无需 AI。",
+      deepseekLink: "创建 AI API 密钥",
       deepseekHelpSuffix: "。",
       privacyNote:
-        "使用 AI 功能时，DeepSeek 会收到视频字幕及相关视频上下文。保存前请查看 DeepSeek 的服务条款和价格。",
+        "使用 AI 功能时，你配置的 AI 服务会收到相关字幕和视频上下文，请查看其服务条款和价格。",
       saveSettings: "保存设置",
       localRemix: "本地改造",
       customizationTitle: "想使用其他 AI 模型？",
@@ -255,7 +255,7 @@ const YTD_OPTIONS = (() => {
 
   async function readPreferredLanguage(storage) {
     const stored = await storage.get(LANGUAGE_STORAGE_KEY);
-    return normalizeLanguage(stored[LANGUAGE_STORAGE_KEY]);
+    return normalizeLanguage(stored[LANGUAGE_STORAGE_KEY] ?? 'zh-CN');
   }
 
   async function persistPreferredLanguage(storage, language) {
@@ -420,6 +420,8 @@ const YTD_OPTIONS = (() => {
         );
         const settings = migration.settings;
 
+        doc.getElementById('aiBaseUrl').value = settings.aiBaseUrl;
+        doc.getElementById('aiModel').value = settings.aiModel;
         aiApiKeyInput.value = settings.aiApiKey;
         supadataApiKeyInput.value = settings.supadataApiKey;
         if (migration.migrated) {
@@ -444,25 +446,21 @@ const YTD_OPTIONS = (() => {
       event.preventDefault();
       setStatus(saveStatus, "saving");
 
-      const settings = settingsApi.normalize({
-        aiApiKey: aiApiKeyInput.value,
-        supadataApiKey: supadataApiKeyInput.value,
-      });
-
-      if (!settings.supadataApiKey) {
-        setStatus(saveStatus, "addSupadataKey");
-        return;
-      }
-      if (!settings.aiApiKey) {
-        setStatus(saveStatus, "addDeepseekKey");
-        return;
-      }
-
       try {
+        const settings = settingsApi.normalize({ schemaVersion: 2,
+          aiApiKey: aiApiKeyInput.value, supadataApiKey: supadataApiKeyInput.value,
+          aiBaseUrl: doc.getElementById('aiBaseUrl').value, aiModel: doc.getElementById('aiModel').value,
+        });
+        const url = new URL(settings.aiBaseUrl);
+        if (root.chrome?.permissions && url.hostname !== 'api.deepseek.com') {
+          const granted = await root.chrome.permissions.request({ origins: [url.protocol + '//' + url.hostname + '/*'] });
+          if (!granted) throw new Error('未授权该模型服务地址。');
+        }
         await storage.set({ [settingsApi.STORAGE_KEY]: settings });
         setStatus(saveStatus, "saved");
-      } catch (_error) {
+      } catch (error) {
         setStatus(saveStatus, "saveFailed");
+        saveStatus.textContent += ' ' + error.message;
       }
     }
 
@@ -481,12 +479,13 @@ const YTD_OPTIONS = (() => {
 
     async function clearCachedDigests() {
       const all = await storage.get(null);
-      const keys = Object.keys(all).filter((key) => key.startsWith("digest_"));
+      const keys = Object.keys(all).filter((key) => key.startsWith("digest_") || key.startsWith("study_ai_"));
       if (keys.length) await storage.remove(keys);
       setStatus(dataStatus, "clearedDigests", { count: keys.length });
     }
 
     async function clearNotes() {
+      if (!root.confirm("确定删除全部摘录？此操作无法撤销，请先导出。")) return;
       await storage.remove("ytd_notes");
       setStatus(dataStatus, "notesDeleted");
     }
@@ -503,6 +502,15 @@ const YTD_OPTIONS = (() => {
       setStatus(dataStatus, "allDataDeleted");
     }
 
+    doc.getElementById('testConnectionBtn').addEventListener('click', async () => {
+      const button = doc.getElementById('testConnectionBtn'), status = doc.getElementById('connectionStatus');
+      button.disabled = true; status.textContent = '测试中…';
+      try {
+        const result = await root.chrome.runtime.sendMessage({ action: 'testAiConnection' });
+        status.textContent = result.success ? '连接成功' : '连接失败：' + result.error;
+      } catch (e) { status.textContent = '连接失败：' + e.message; }
+      finally { button.disabled = false; }
+    });
     form.addEventListener("submit", saveSettings);
     copyCustomizationPromptBtn.addEventListener(
       "click",

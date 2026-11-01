@@ -23,3 +23,12 @@ dist/
 .env.*
 *.pem
 *.key
+
+# Browser/test state and local diagnostics
+playwright-report/
+test-results/
+coverage/
+*.log
+*.crx
+*.pfx
+*.p12

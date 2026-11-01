@@ -3,6 +3,14 @@ const assert = require("node:assert/strict");
 
 const settings = require("../settings.js");
 
+test('custom providers preserve endpoint and model without moving credentials to the URL', () => {
+  const custom=settings.normalize({schemaVersion:2,aiBaseUrl:'https://provider.example/v1/chat/completions',aiModel:'model-x',aiApiKey:'test-key'});
+  assert.equal(settings.chatCompletionsUrl(custom),'https://provider.example/v1/chat/completions');
+  assert.equal(custom.aiModel,'model-x');assert.equal(custom.aiApiKey,'test-key');
+  for (const url of ['http://remote.example','https://user:password@example.com','https://example.com?key=test','javascript:alert(1)']) assert.throws(()=>settings.safeBaseUrl(url));
+  assert.equal(settings.safeBaseUrl('http://localhost:1234/v1'),'http://localhost:1234/v1');
+});
+
 test("DeepSeek defaults use V4 Flash", () => {
   const normalized = settings.normalize({
     provider: "unexpected",
