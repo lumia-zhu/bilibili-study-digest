@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BiliMemo",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "minimum_chrome_version": "116",
   "description": "B站与 YouTube 视频学习助手：原始字幕阅读、播放同步、按需翻译、章节概览与时间戳摘录。",
   "permissions": [

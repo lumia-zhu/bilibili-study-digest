@@ -2821,6 +2821,16 @@ function renderTranscriptSegmentContent(segment, mode, translated, error) {
 
 let transcriptReadingLayout = 'paragraph';
 let transcriptLayoutSegments = [];
+let transcriptPlanSource = null;
+let transcriptReadingPlan = null;
+
+function getTranscriptReadingPlan(segments) {
+  if (transcriptPlanSource !== segments) {
+    transcriptReadingPlan = STUDY.readingPlan(segments);
+    transcriptPlanSource = segments;
+  }
+  return transcriptReadingPlan;
+}
 
 function layoutTranscriptRows(segments, rows) {
   const list = document.getElementById('transcriptList');
@@ -2829,8 +2839,9 @@ function layoutTranscriptRows(segments, rows) {
   list.classList.toggle('bilingual-reading', currentTranscriptMode === 'bilingual');
   const fragment = document.createDocumentFragment();
   if (grouped) {
+    const plan = getTranscriptReadingPlan(segments);
     let index = 0;
-    for (const group of STUDY.readingParagraphs(segments)) {
+    for (const group of plan.groups) {
       const paragraph = document.createElement('div');
       paragraph.className = 'reading-paragraph';
       const stamp = document.createElement('button');
@@ -2840,7 +2851,17 @@ function layoutTranscriptRows(segments, rows) {
       stamp.addEventListener('click', event => seekFromTranscriptEntryClick(event, group[0].start));
       const copy = document.createElement('div'); copy.className = 'reading-paragraph-copy';
       group.forEach((segment, i) => {
-        if (i) copy.append(document.createTextNode(STUDY.readingSeparator(group[i - 1].text, segment.text)));
+        if (i) {
+          const separator = STUDY.readingSeparator(group[i - 1].text, segment.text);
+          if (separator) copy.append(document.createTextNode(separator));
+          if (currentTranscriptMode === 'original' && plan.pauseBefore.has(index)) {
+            // CSS-generated punctuation is absent from source text, search,
+            // selection, excerpts and clipboard/export output.
+            const pause = document.createElement('span');
+            pause.className = 'reading-pause'; pause.setAttribute('aria-hidden', 'true');
+            copy.append(pause);
+          }
+        }
         copy.append(rows[index++]);
       });
       paragraph.append(stamp, copy); fragment.append(paragraph);

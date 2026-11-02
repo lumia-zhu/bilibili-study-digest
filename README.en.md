@@ -8,9 +8,9 @@ A browser extension for reading captions, finding passages and reviewing key poi
 
 **Start with original captions in a paragraph layout. Use AI only when you choose to.** Reading, search and playback highlighting require no AI key and make no model calls.
 
-[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.8) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
+[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.9) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **v0.1.8 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
+Current version: **v0.1.9 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
@@ -23,13 +23,13 @@ Current version: **v0.1.8 development preview** for Edge / Chrome. Not published
 | Translation and explanation | Read English captions in Chinese or bilingually; explain selected text | On request |
 | Chapter overview | Generate chapters, key points and original quotes; process long captions in batches | On request |
 
-Local paragraph layout does not rewrite the text. Each original cue retains its timing and highlight. It does not add missing punctuation. AI cleanup is temporarily hidden in this release.
+Local layout uses shorter paragraphs, usually around 60–90 Chinese characters. Long pauses can end a paragraph earlier; a single oversized cue stays intact. Conservative timing rules may display a few helper commas at clear pauses, without adding periods or spaces between Chinese fragments. These visual commas are excluded from selection, search, excerpts, copy and export. Original wording, cue timing and highlighting remain intact. No AI is used; AI cleanup remains hidden.
 
 ## Installation
 
 ### 1. Download and load the extension
 
-1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.8) and download **`bilimemo-v0.1.8.zip`** from the assets.
+1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.9) and download **`bilimemo-v0.1.9.zip`** from the assets.
 2. Extract it into a permanent folder containing `manifest.json`. Do not select the ZIP itself.
 3. Open `edge://extensions` in Edge or `chrome://extensions` in Chrome.
 4. Enable **Developer mode**, choose **Load unpacked**, and select the extracted folder.
@@ -83,7 +83,7 @@ The inherited YouTube workflow requires a separate Supadata key. Development and
 - Standard Bilibili BV video pages and multipart videos are supported. Live streams and series pages are outside the current scope.
 - Original captions, translations and different tracks are handled separately. Incomplete translation exports are explicitly identified.
 - Original excerpts can be saved and exported; a personal interpretation editor is not included.
-- Local layout rules do not guarantee topic boundaries. The fallback player clock has whole-second precision.
+- Local rules do not guarantee semantic sentence boundaries. Without reliable pause timing, only paragraph length is adjusted. The fallback player clock has whole-second precision.
 - This is a development preview. The full real-video, login, live-model and store-installation matrix remains incomplete. See the [validation record](VALIDATION.md).
 
 ## Development

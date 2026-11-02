@@ -10,29 +10,51 @@ var STUDY = (() => {
     return (Array.isArray(rows) ? rows : []).filter(r => typeof r.text === 'string' && r.text.trim() && Number.isFinite(r.start) && r.start >= 0)
       .map((r, i) => ({ id: `s${i}`, text: r.text.trim(), start: r.start, end: r.start + Math.max(0, Number(r.duration) || 0) }));
   }
-  // Presentation only: keep the original objects, text, order and timing.
-  // Punctuation is a boundary hint, never something we invent for the source.
-  function readingParagraphs(segments) {
-    const groups = [];
-    let group = [], size = 0;
-    const flush = () => { if (group.length) groups.push(group); group = []; size = 0; };
-    const weight = text => {
-      const chars = Array.from(String(text || ''));
-      return chars.reduce((n, c) => n + (/\p{Script=Han}/u.test(c) ? 1 : 0.25), 0);
-    };
-    for (const segment of segments) {
-      const units = weight(segment.text);
+  // A single linear pass produces a display plan, never a rewritten transcript.
+  // pauseBefore contains source indices for optional, visual-only commas.
+  function readingPlan(segments) {
+    const groups = [], pauseBefore = new Set();
+    let group = [], size = 0, clauseSize = 0, previousText = '', previousHan = 0;
+    const flush = () => { if (group.length) groups.push(group); group = []; size = 0; clauseSize = 0; };
+    const han = /\p{Script=Han}/u;
+    const punctuation = /[，。！？；：、,.!?;:…]/u;
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index], text = String(segment.text || '').trim();
+      let units = 0, tailUnits = 0, hanCount = 0, hasPunctuation = false;
+      for (const char of text) {
+        const isHan = han.test(char), weight = isHan ? 1 : 0.25;
+        units += weight;
+        if (isHan) hanCount++;
+        if (punctuation.test(char)) { tailUnits = 0; hasPunctuation = true; }
+        else tailUnits += weight;
+      }
       const previous = group.at(-1);
+      // Missing/zero durations and overlapping cues do not prove a spoken pause.
+      const gap = previous && Number.isFinite(previous.start) && Number.isFinite(previous.end) &&
+        previous.end > previous.start && Number.isFinite(segment.start)
+        ? segment.start - previous.end : 0;
       const end = Number.isFinite(segment.end) ? segment.end : segment.start;
-      if (group.length && (segment.ids?.length || size + units > 150 ||
-          end - group[0].start > 30 || segment.start - (previous.end ?? previous.start) >= 1.5)) flush();
+      if (group.length && (segment.ids?.length || size + units > 90 ||
+          end - group[0].start > 24 || gap >= 1.5 || (size >= 60 && gap >= 0.45))) flush();
+      if (group.length && gap >= 0.45 && gap < 1.5 && clauseSize >= 10 &&
+          previousHan >= 4 && hanCount >= 3 &&
+          /\p{Script=Han}$/u.test(previousText) && /^\p{Script=Han}/u.test(text) &&
+          // Conservative exclusions for short fragments, numbers and joiners.
+          !/[的地得和与及或把被对向从在为是不没将让给零〇一二三四五六七八九十百千万亿兆两]$/u.test(previousText) &&
+          !/[零〇一二三四五六七八九十百千万亿兆两]点$/u.test(previousText) &&
+          !/^[的地得着了过吗呢吧啊零〇一二三四五六七八九十百千万亿兆两]/u.test(text)) {
+        pauseBefore.add(index); clauseSize = 0;
+      }
       group.push(segment); size += units;
-      if (segment.ids?.length || (/[。！？.!?…][”’"'）)\]]*$/u.test(segment.text.trim()) &&
+      clauseSize = hasPunctuation ? tailUnits : clauseSize + units;
+      if (segment.ids?.length || (/[。！？.!?…][”’"'）)\]]*$/u.test(text) &&
           (size >= 60 || end - group[0].start >= 18))) flush();
+      previousText = text; previousHan = hanCount;
     }
     flush();
-    return groups;
+    return { groups, pauseBefore };
   }
+  function readingParagraphs(segments) { return readingPlan(segments).groups; }
   function readingSeparator(previous, next) {
     const left = String(previous || '').trimEnd(), right = String(next || '').trimStart();
     if (!left || !right) return '';
@@ -113,6 +135,6 @@ var STUDY = (() => {
     if (missing && !partial) return { missing, text: null };
     return { missing, text: `${title}\n${url}\n模式：${mode}${missing ? `（部分结果，${missing} 段未翻译）` : ''}\n\n${lines.join('\n\n')}` };
   }
-  return { VERSION, time, captions, readingParagraphs, readingSeparator, batches, words, validateCleanup, validateOverview, mergeOverview, exportText };
+  return { VERSION, time, captions, readingPlan, readingParagraphs, readingSeparator, batches, words, validateCleanup, validateOverview, mergeOverview, exportText };
 })();
 if (typeof module !== 'undefined') module.exports = STUDY;

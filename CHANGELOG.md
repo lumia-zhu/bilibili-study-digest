@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.9 — 2026-11-02
+
+- 原始字幕改用较短段落，通常约 60～90 个汉字；优先利用已有标点与停顿分段。
+- 仅根据可靠停顿和保守边界规则显示少量辅助逗号，不补句号、不调用 AI。
+- 辅助逗号只存在于显示层；选中文字、搜索、摘录、复制与导出保持原文，原有时间戳及播放高亮继续对应源片段。
+- 段落计算按字幕数组缓存，播放和段落／逐句切换不重复计算。保留单条超长字幕，不截断原文。
+
+Shorter local paragraphs and conservative visual pause commas, with no AI calls. Source text, excerpts and exports remain unchanged; layout planning is reused during playback and layout switches.
+
 ## v0.1.8 — 2026-11-02
 
 - 侧栏蓝色减少灰感，调整为更清亮的天蓝；同步微调选中指示线、按钮、浅色表面和字幕高亮。

@@ -912,6 +912,8 @@ body {
 }
 .paragraph-time:hover { color: var(--accent); }
 .reading-paragraph-copy { font-family: var(--font-reading); font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
+.reading-pause::before { content: "，"; color: var(--text); }
+.reading-pause { user-select: none; }
 .paragraph-mode .transcript-entry { display: inline; padding: 2px 0; margin: 0; border: 0; border-radius: 3px; box-shadow: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .paragraph-mode .transcript-entry .transcript-time { display: none; }
 .paragraph-mode .transcript-text { font-size: inherit; line-height: inherit; color: var(--text); }

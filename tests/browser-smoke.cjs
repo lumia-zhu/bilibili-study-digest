@@ -195,6 +195,107 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`reader-ui-v${version}-440.png`)});
  assert.deepEqual(errors,[]);
  console.log('PASS: paragraph grouping / exact source text / sentence highlight and seek / selection / cross-cue search / anchored layout switch / zero AI / narrow layout');
+ // A generated comma must be visible but absent from selection/search/export.
+ const pauseTexts=await reader.evaluate(()=>{
+   const nativePlan=STUDY.readingPlan;__api.planCalls=0;
+   STUDY.readingPlan=segments=>{__api.planCalls++;return nativePlan(segments);};
+   const texts=['很多时候问题并不是看得太少','而是看完以后没有把信息整理成自己的理解。',
+     '我们收藏了很多视频也记下了很多观点','但过了一段时间真正能用起来的内容并不多',
+     '阅读时可以先看完整的段落','遇到重要的内容再回到视频核对。',
+     '这样既能保留说话者原来的表达','也能避免一句一句往下翻','把注意力更多地放在内容本身'];
+   currentTranscript=texts.map((text,i)=>({text,start:i*4.6,duration:4}));
+   currentTranscriptText=texts.join('');studyState.key='';__api.time=0;
+   renderTranscript();autoScrollEnabled=false;document.getElementById('contentArea').scrollTop=0;
+   __api.savedPlan=transcriptReadingPlan;
+   return texts;
+ });
+ assert.ok(await reader.locator('.reading-pause').count()>=2);
+ assert.equal(await reader.locator('.reading-pause').first().evaluate(el=>getComputedStyle(el,'::before').content),'"，"');
+ assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),pauseTexts);
+ assert.doesNotMatch(await reader.locator('#transcriptList').textContent(),/，/);
+ await reader.fill('#transcriptSearchInput','太少而是');
+ assert.equal(await reader.locator('#transcriptSearchCount').innerText(),'1 of 1');
+ assert.equal(await reader.locator('mark.current').count(),2);
+ await reader.fill('#transcriptSearchInput','');
+ const selectionText=await reader.evaluate(()=>{
+   const first=document.querySelector('[data-segment-id=s0] .transcript-text');
+   const last=document.querySelector('[data-segment-id=s1] .transcript-text');
+   const range=document.createRange();range.setStart(first,0);range.setEnd(last,last.childNodes.length);
+   const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+   document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+   return selection.toString();
+ });
+ assert.equal(selectionText,pauseTexts[0]+pauseTexts[1]);
+ await reader.locator('.selection-note-btn').click();
+ await reader.waitForFunction(()=>__api.notes.length===1);
+ assert.equal(await reader.evaluate(()=>__api.notes[0].text),selectionText);
+ await reader.evaluate(()=>{
+   window.getSelection().removeAllRanges();
+   // Capture output without changing the user's OS clipboard or creating files.
+   copyToClipboardWithFeedback=text=>{__api.copied=text;};
+   downloadTextFile=(text,filename)=>{__api.exported={text,filename};};
+ });
+ await reader.click('#copyTranscriptBtn');await reader.click('#exportTranscriptBtn');
+ const outputs=await reader.evaluate(()=>[__api.copied,__api.exported.text]);
+ for(const text of outputs) {assert.doesNotMatch(text,/，/);for(const source of pauseTexts) assert.ok(text.includes(source));}
+ await reader.getByRole('button',{name:'逐句',exact:true}).click();
+ assert.equal(await reader.locator('.reading-pause').count(),0);
+ await reader.getByRole('button',{name:'段落',exact:true}).click();
+ assert.ok(await reader.locator('.reading-pause').count()>=2);
+ await reader.evaluate(()=>{__api.time=4.8;document.getElementById('contentArea').scrollTop=0;});
+ await reader.waitForFunction(()=>document.querySelector('.active-playback')?.dataset.segmentId==='s1');
+ assert.equal(await reader.evaluate(()=>__api.planCalls),1);
+ assert.equal(await reader.evaluate(()=>transcriptReadingPlan===__api.savedPlan),true);
+ assert.equal(await reader.evaluate(()=>__api.paid),0);
+ for (const width of [360,440]) {
+   await reader.setViewportSize({width,height:880});
+   assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`pause-reading-v${version}-${width}.png`)});
+ }
+ await reader.selectOption('#subtitleTrack','en');await reader.waitForFunction(()=>currentTranscriptLanguage==='en');
+ assert.equal(await reader.locator('.reading-pause').count(),0);
+ assert.equal(await reader.evaluate(()=>transcriptReadingPlan===__api.savedPlan),false);
+ assert.equal(await reader.evaluate(()=>__api.planCalls),2);
+ console.log('PASS: visual-only commas / raw selection and excerpts / copy and export / cross-comma search / cached layout / source invalidation / no AI');
+ if (process.env.READING_BASELINE) {
+   const source=fs.readFileSync(process.env.READING_BASELINE,'utf8');
+   await reader.addScriptTag({content:`window.__readingBaseline=(()=>{${source}\nreturn STUDY;})();`});
+   const timing=await reader.evaluate(()=>{
+     const texts=['很多时候问题并不是看得太少','而是看完以后没有把信息整理成自己的理解。',
+       '我们收藏了很多视频也记下了很多观点','但过了一段时间真正能用起来的内容并不多'];
+     const currentPlan=STUDY.readingPlan;
+     const stats=values=>{values.sort((a,b)=>a-b);return {medianMs:+values[Math.floor(values.length/2)].toFixed(2),p95Ms:+values[Math.floor(values.length*.95)].toFixed(2)};};
+     const report=[];
+     for (const count of [1310,3000,10000]) {
+       const raw=Array.from({length:count},(_,i)=>({text:texts[i%texts.length],start:i*2.6,duration:2}));
+       const rows=STUDY.captions(raw),before=[],after=[];
+       for (let i=0;i<30;i++) {
+         let start=performance.now();__readingBaseline.readingParagraphs(rows);let ms=performance.now()-start;if(i>=5)before.push(ms);
+         start=performance.now();currentPlan(rows);ms=performance.now()-start;if(i>=5)after.push(ms);
+       }
+       const result={count,baselinePlan:stats(before),newPlan:stats(after)};
+       if (count===1310) {
+         const oldRender=[],newRender=[];
+         // Same DOM renderer and source data; compare old grouping against the
+         // new plan, including the extra paragraph and comma nodes + layout.
+         for(let i=0;i<8;i++) {
+           for(const newer of (i%2?[true,false]:[false,true])) {
+             STUDY.readingPlan=newer?currentPlan:s=>({groups:__readingBaseline.readingParagraphs(s),pauseBefore:new Set()});
+             currentTranscript=raw;currentTranscriptMode='original';stopPlaybackTracking();
+             const start=performance.now();renderTranscript();void document.getElementById('transcriptList').offsetHeight;
+             const ms=performance.now()-start;stopPlaybackTracking();if(i>=2)(newer?newRender:oldRender).push(ms);
+           }
+         }
+         result.baselineRender=stats(oldRender);result.newRender=stats(newRender);
+       }
+       report.push(result);
+     }
+     STUDY.readingPlan=currentPlan;
+     return report;
+   });
+   console.log('PERF (isolated Edge, synthetic captions): '+JSON.stringify(timing));
+ }
+ assert.deepEqual(errors,[]);
  // Floating entry is also tested in a browser DOM after SPA changes and removal.
  const floating=await context.newPage();await floating.goto('http://digest.test/sidepanel.html');
  await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html',body:'<h1>测试视频</h1><video></video>'}));
