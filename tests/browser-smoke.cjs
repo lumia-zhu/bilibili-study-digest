@@ -187,10 +187,10 @@ const root=path.resolve(__dirname,'..');
  await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html',body:'<h1>测试视频</h1><video></video>'}));
  await floating.goto('https://www.bilibili.com/video/BV1a6Yx62EH4/');
  await floating.addScriptTag({path:path.join(root,'platforms.js')});await floating.addScriptTag({path:path.join(root,'bilibili-content.js')});
- await floating.getByRole('button',{name:'Digest · 字幕'}).click();
+ await floating.getByRole('button',{name:'BiliMemo · 字幕'}).click();
  assert.ok(await floating.evaluate(()=>__api.calls.some(m=>m.action==='openSidePanel')));
  await floating.evaluate(()=>{history.pushState({},'', '?p=2');document.getElementById('bili-digest-controls').remove();});
- await floating.getByRole('button',{name:'Digest · 字幕'}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
+ await floating.getByRole('button',{name:'BiliMemo · 字幕'}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
  console.log('PASS: floating entry / click relay / SPA recovery / single instance');
  await context.close();
  } finally {await browser.close();}

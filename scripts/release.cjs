@@ -9,7 +9,7 @@ const files = [
   'playback-client.js',
   'vendor/bilibili-digest/wbi.js','vendor/bilibili-digest/bili-api.js','vendor/bilibili-digest/LICENSE','vendor/bilibili-digest/NOTICE.md',
   'content.js','study-core.js','study-ai.js','study-panel.js','sidepanel.html','sidepanel.css','sidepanel.js',
-  'options.html','options.css','options.js','icons/icon16.png','icons/icon48.png','icons/icon128.png',
+  'options.html','options.css','options.js','icons/icon16.png','icons/icon48.png','icons/icon128.png','icons/icon512.png',
   'prompts/analysis.md','prompts/explain.md','prompts/note-cleanup.md','prompts/translation.md',
   'README.md','README.en.md','README.zh-CN.md','BILIBILI.md','PRIVACY.md','SECURITY.md','LICENSE','NOTICE.md','CHANGELOG.md','VALIDATION.md','DEVELOPMENT.md'
 ].sort();
@@ -52,6 +52,6 @@ if(process.argv.includes('--package')) {
   }
   const directory=Buffer.concat(central),end=Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);
   const archive=Buffer.concat([...chunks,directory,end]); fs.mkdirSync('dist',{recursive:true});
-  const output=`dist/bilibili-study-digest-v${manifest.version}.zip`;fs.writeFileSync(output,archive);
+  const output=`dist/bilimemo-v${manifest.version}.zip`;fs.writeFileSync(output,archive);
   console.log(`Created ${path.resolve(output)}\nSHA-256: ${createHash('sha256').update(archive).digest('hex')}`);
 }

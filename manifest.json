@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "B 站学习 Digest",
-  "version": "0.1.5",
+  "name": "BiliMemo",
+  "version": "0.1.6",
   "minimum_chrome_version": "116",
-  "description": "原始字幕阅读、按需 AI 整理、完整章节概览与时间戳摘录。基于 YouTube Digest 的社区版本。",
+  "description": "B站与 YouTube 视频学习助手：原始字幕阅读、播放同步、按需 AI 整理、章节概览与时间戳摘录。",
   "permissions": [
     "sidePanel",
     "storage",
@@ -23,7 +23,7 @@
     "https://subtitle.bilibili.com/*"
   ],
   "action": {
-    "default_title": "打开 B 站学习 Digest",
+    "default_title": "打开 BiliMemo",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

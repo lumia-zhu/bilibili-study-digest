@@ -30,8 +30,8 @@ function createLocalStorage() {
 }
 
 test("Settings copy covers English and Simplified Chinese", () => {
-  assert.equal(options.translate("en", "pageTitle"), "Bilibili Study Digest Settings");
-  assert.equal(options.translate("zh-CN", "pageTitle"), "B 站学习 Digest 设置");
+  assert.equal(options.translate("en", "pageTitle"), "BiliMemo Settings");
+  assert.equal(options.translate("zh-CN", "pageTitle"), "BiliMemo 设置");
   assert.equal(options.translate("en", "saveSettings"), "Save settings");
   assert.equal(options.translate("zh-CN", "saveSettings"), "保存设置");
   assert.equal(
@@ -137,11 +137,11 @@ test("customization guidance is concise and has a visible placeholder reminder",
   );
   assert.equal(
     options.translate("en", "customizationStepFolder"),
-    "Open the extracted YouTube Digest project folder in your coding agent.",
+    "Open the extracted BiliMemo project folder in your coding agent.",
   );
   assert.equal(
     options.translate("zh-CN", "customizationStepFolder"),
-    "在编程 Agent 中打开 YouTube Digest 解压后的项目文件夹。",
+    "在编程 Agent 中打开 BiliMemo 解压后的项目文件夹。",
   );
   assert.doesNotMatch(html, /~\/Documents\/youtube-digest/);
   assert.doesNotMatch(html, /%USERPROFILE%\\Documents\\youtube-digest/);
@@ -157,7 +157,7 @@ test("customization prompt switches languages and preserves technical values", (
   assert.match(html, /https:\/\/dash\.supadata\.ai\/auth\/sign-up/);
   assert.match(html, /https:\/\/platform\.deepseek\.com\/api_keys/);
   assert.ok(html.includes(`>${englishPrompt}</textarea>`));
-  assert.match(chinesePrompt, /^请把当前本地 YouTube Digest 工作区改为使用/);
+  assert.match(chinesePrompt, /^请把当前本地 BiliMemo 工作区改为使用/);
   assert.notEqual(chinesePrompt, englishPrompt);
   assert.match(
     englishPrompt,
@@ -173,7 +173,7 @@ test("customization prompt switches languages and preserves technical values", (
     assert.match(prompt, /\[MODEL\]/);
     assert.match(prompt, /manifest\.json/);
     assert.match(prompt, /README\.md/);
-    assert.match(prompt, /README\.zh-CN\.md/);
+    assert.match(prompt, /README\.en\.md/);
     assert.match(prompt, /PRIVACY\.md/);
     assert.match(prompt, /SECURITY\.md/);
     assert.match(prompt, /npm test/);

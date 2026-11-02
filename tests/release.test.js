@@ -17,12 +17,12 @@ test("manifest uses minimized install-time permissions", () => {
   assert.ok(!manifest.permissions.includes("activeTab"));
   assert.ok(manifest.host_permissions.includes("https://api.deepseek.com/*"));
   assert.equal(Object.hasOwn(manifest, "optional_host_permissions"), true);
-  assert.equal(manifest.version, "0.1.5");
+  assert.equal(manifest.version, "0.1.6");
 });
 
 test("release documents describe the fork and explicit AI costs", () => {
   const manifest = JSON.parse(read("manifest.json"));
-  assert.equal(manifest.name, "B 站学习 Digest");
+  assert.equal(manifest.name, "BiliMemo");
   assert.match(read("README.zh-CN.md"), /默认显示原始字幕/);
   assert.match(read("README.md"), /Zara Zhang/);
   assert.match(read("PRIVACY.md"), /configured AI provider/);

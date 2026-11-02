@@ -1,4 +1,6 @@
-# Bilibili Study Digest
+# BiliMemo
+
+<img src="icons/icon128.png" alt="BiliMemo" width="80" height="80">
 
 [简体中文](README.md) · **English**
 
@@ -6,9 +8,9 @@ A browser extension for reading captions, finding passages and reviewing key poi
 
 **Start with original captions in a paragraph layout. Use AI only when you choose to.** Reading, search and playback highlighting require no AI key and make no model calls.
 
-[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.5) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
+[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.6) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **v0.1.5 development preview** for Edge / Chrome. Not published in extension stores. An independently maintained, MIT-licensed derivative of [YouTube Digest by Zara Zhang](https://github.com/zarazhangrui/youtube-digest).
+Current version: **v0.1.6 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
@@ -28,14 +30,14 @@ Local paragraph layout does not rewrite the text. Each original cue retains its 
 
 ### 1. Download and load the extension
 
-1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.5) and download **`bilibili-study-digest-v0.1.5.zip`** from the assets.
+1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.6) and download **`bilimemo-v0.1.6.zip`** from the assets.
 2. Extract it into a permanent folder containing `manifest.json`. Do not select the ZIP itself.
 3. Open `edge://extensions` in Edge or `chrome://extensions` in Chrome.
 4. Enable **Developer mode**, choose **Load unpacked**, and select the extracted folder.
 
 ### 2. Open a Bilibili video
 
-Refresh existing video tabs. Open the side panel using the floating **Digest · 字幕** button or the extension's toolbar icon.
+Refresh existing video tabs. Open the side panel using the floating **BiliMemo · 字幕** button or the extension's toolbar icon.
 
 Try original captions, keyword search, click-to-seek and saving an excerpt first. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
 

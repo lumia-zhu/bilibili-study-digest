@@ -41,7 +41,7 @@ function harness() {
 test("Bilibili controls open the panel and save current-part timestamp notes", async () => {
   const h = harness();
   const controls = h.body.children[0].shadow.children[1];
-  assert.equal(controls.children[0].textContent, "Digest · 字幕");
+  assert.equal(controls.children[0].textContent, "BiliMemo · 字幕");
   await controls.children[0].listeners.click();
   assert.equal(h.sent.at(-1).action, "openSidePanel");
   await controls.children[1].listeners.click();

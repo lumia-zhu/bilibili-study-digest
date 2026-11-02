@@ -1,6 +1,6 @@
 {
-  "name": "bilibili-study-digest",
-  "version": "0.1.5",
+  "name": "bilimemo",
+  "version": "0.1.6",
   "private": true,
   "description": "Bilibili-first raw caption reader with explicit AI cleanup and complete overview coverage.",
   "license": "MIT",

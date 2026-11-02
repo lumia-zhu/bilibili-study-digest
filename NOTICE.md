@@ -1,6 +1,6 @@
 # 来源、修改与许可证 / Attribution and licensing
 
-本项目 **B 站学习 Digest / Bilibili Study Digest** 由 [lumia-zhu](https://github.com/lumia-zhu) 维护，基于下列开源项目进行二次开发。它不是 Zara Zhang 的官方版本，也不代表原作者为本项目背书。
+本项目 **BiliMemo**（原名 B 站学习 Digest / Bilibili Study Digest） 由 [lumia-zhu](https://github.com/lumia-zhu) 维护，基于下列开源项目进行二次开发。它不是 Zara Zhang 的官方版本，也不代表原作者为本项目背书。
 
 This is an independently maintained derivative, not an official release or endorsement by Zara Zhang or the other upstream contributors.
 

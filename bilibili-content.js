@@ -88,7 +88,7 @@
       [role=status]{display:block;max-width:300px;color:#333;background:#fff;border-radius:8px;margin-top:6px}
       [role=status]:not(:empty){padding:8px 12px;box-shadow:0 3px 12px #0002}`;
     const controls = document.createElement("div"); controls.className = "controls";
-    const open = document.createElement("button"); open.textContent = "Digest · 字幕";
+    const open = document.createElement("button"); open.textContent = "BiliMemo · 字幕";
     open.title = "打开字幕、概览与摘录";
     open.addEventListener("click", () => {
       chrome.runtime.sendMessage({ action: "openSidePanel" }).then(result => {
