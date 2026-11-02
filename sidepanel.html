@@ -72,14 +72,14 @@
 
     <div id="studyToolbar" class="study-toolbar" hidden>
       <div class="study-tools"><span id="subtitleSource">原始字幕优先 · AI 按需使用</span><select id="subtitleTrack" aria-label="字幕轨" hidden></select></div>
-      <div class="study-tools">
-        <button id="rawModeBtn" class="enhance-btn active">原始字幕</button>
-        <button id="cleanModeBtn" class="enhance-btn" disabled>整理结果</button>
-        <button id="cleanTranscriptBtn" class="enhance-btn">AI 整理断句</button>
+      <div class="study-tools" id="studyTaskControls" hidden>
+        <button id="rawModeBtn" class="enhance-btn active" hidden disabled>原始字幕</button>
+        <button id="cleanModeBtn" class="enhance-btn" hidden disabled>整理结果</button>
+        <button id="cleanTranscriptBtn" class="enhance-btn" hidden disabled>AI 整理断句</button>
         <button id="translateAllBtn" class="enhance-btn">翻译全文</button>
-        <button id="stopStudyBtn" class="enhance-btn" disabled>停止后续处理</button>
+        <button id="stopStudyBtn" class="enhance-btn" hidden disabled>停止后续处理</button>
       </div>
-      <p id="studyStatus" role="status" aria-live="polite">原始字幕不调用模型。整理、翻译和概览由你主动开启。</p>
+      <p id="studyStatus" role="status" aria-live="polite" hidden></p>
     </div>
     <!-- MAIN CONTENT -->
     <div class="content" id="contentArea">

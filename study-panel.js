@@ -1,4 +1,7 @@
 /* Explicit-cost study controls layered on the upstream reader. */
+// Keep the implementation available for a future iteration, but expose no
+// cleanup controls or paid cleanup path in this reading-focused release.
+const STUDY_CLEANUP_ENABLED = false;
 const studyState = { key: '', epoch: 0, cleaned: [], useCleaned: false, busy: false, stop: false, fullTranslation: false, parts: {}, failures: [], status: '', kind: '' };
 const studyEl = id => document.getElementById(id);
 const studyKey = () => `${currentVideoId}:${currentTranscriptSource?.trackId || currentTranscriptLanguage || ''}`;
@@ -15,12 +18,16 @@ showState = function (state) {
   upstreamShowState(state);
   studyEl('studyToolbar').hidden = state !== 'results';
 };
-function studyStatus(text) { studyState.status = text; if (studyEl('studyStatus')) studyEl('studyStatus').textContent = text; }
+function studyStatus(text) {
+  studyState.status = text;
+  const status = studyEl('studyStatus');
+  if (status) { status.textContent = text; status.hidden = !text; }
+}
 function studyReset() {
   if (studyState.key === studyKey()) return;
   studyState.key = studyKey(); studyState.epoch++; studyState.stop = true; studyState.busy = false;
   studyState.cleaned = []; studyState.useCleaned = false; studyState.parts = {}; studyState.failures = []; studyState.fullTranslation = false;
-  studyStatus('原始字幕 · 未启动 AI 任务');
+  studyStatus('');
   if (studyEl('overviewSummary')) studyEl('overviewSummary').replaceChildren();
   if (studyEl('chapterList')) studyEl('chapterList').replaceChildren();
   if (studyEl('quotesList')) studyEl('quotesList').replaceChildren();
@@ -28,7 +35,7 @@ function studyReset() {
 const upstreamSegments = getActiveTranscriptSegments;
 getActiveTranscriptSegments = function () {
   studyReset();
-  if (studyState.useCleaned && studyState.cleaned.length) return studyState.cleaned;
+  if (STUDY_CLEANUP_ENABLED && studyState.useCleaned && studyState.cleaned.length) return studyState.cleaned;
   // Segment IDs carry source identity/content via the translation cache key.
   return STUDY.captions(currentTranscript);
 };
@@ -58,11 +65,16 @@ function studyMount() {
   });
   studyEl('rawModeBtn').classList.toggle('active', !studyState.useCleaned);
   studyEl('cleanModeBtn').classList.toggle('active', studyState.useCleaned);
-  studyEl('cleanModeBtn').disabled = !studyState.cleaned.length;
-  ['cleanTranscriptBtn','generateOverviewBtn','translateAllBtn'].forEach(id => studyEl(id).disabled = studyState.busy);
+  for (const id of ['rawModeBtn', 'cleanModeBtn', 'cleanTranscriptBtn']) {
+    studyEl(id).hidden = !STUDY_CLEANUP_ENABLED;
+    studyEl(id).disabled = !STUDY_CLEANUP_ENABLED || studyState.busy || (id === 'cleanModeBtn' && !studyState.cleaned.length);
+  }
+  ['generateOverviewBtn','regenerateOverviewBtn','translateAllBtn'].forEach(id => studyEl(id).disabled = studyState.busy);
   studyEl('stopStudyBtn').disabled = !studyState.busy;
+  studyEl('stopStudyBtn').hidden = !studyState.busy;
   studyEl('translateAllBtn').hidden = isChinese;
-  studyEl('studyStatus').textContent = studyState.status;
+  studyEl('studyTaskControls').hidden = !STUDY_CLEANUP_ENABLED && isChinese && !studyState.busy;
+  studyStatus(studyState.status);
   const tracks = currentTranscriptTracks || [];
   const select = studyEl('subtitleTrack');
   select.replaceChildren();
@@ -72,10 +84,14 @@ function studyMount() {
   }
   select.hidden = tracks.length < 2;
   select.disabled = studyState.busy;
-  studyEl('subtitleSource').textContent = `${currentTranscriptLanguage || '原语言'} · ${currentTranscript?.length || 0} 条字幕 · ${currentTranscriptSource ? 'B 站字幕' : 'YouTube 字幕'}`;
+  const language = isChinese ? '中文' : /^en/i.test(currentTranscriptLanguage || '') ? '英文' : tracks.find(t => t.id === currentTranscriptSource?.trackId)?.name || currentTranscriptLanguage || '原语言';
+  const platform = currentTranscriptSource ? 'B 站' : 'YouTube';
+  const isPlatformAi = tracks.find(t => t.id === currentTranscriptSource?.trackId)?.ai || /^ai-/i.test(currentTranscriptLanguage || '');
+  studyEl('subtitleSource').textContent = `${language} · ${currentTranscript?.length || 0} 条字幕 · ${platform}${isPlatformAi ? ' AI 字幕' : '字幕'}`;
 }
 
 async function runStudyTask(kind, force = false) {
+  if (kind === 'cleanup' && !STUDY_CLEANUP_ENABLED) return;
   if (studyState.busy || !currentTranscript?.length) return;
   if (force && !confirm('重新生成会再次调用模型。确认重新生成？')) return;
   studyReset();
@@ -214,7 +230,7 @@ async function studyChangeTrack() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  studyEl('cleanTranscriptBtn').addEventListener('click', () => runStudyTask('cleanup'));
+  if (STUDY_CLEANUP_ENABLED) studyEl('cleanTranscriptBtn').addEventListener('click', () => runStudyTask('cleanup'));
   studyEl('generateOverviewBtn').addEventListener('click', () => runStudyTask('overview'));
   studyEl('regenerateOverviewBtn').addEventListener('click', () => runStudyTask('overview', true));
   studyEl('translateAllBtn').addEventListener('click', studyFullTranslation);

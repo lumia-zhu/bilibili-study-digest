@@ -16,7 +16,7 @@ const root=path.resolve(__dirname,'..');
    }
    return route.abort();
  });
- await context.addInitScript(()=>{
+ await context.addInitScript(({version})=>{
    const values={}, listeners=[];
    const event={addListener:f=>listeners.push(f),removeListener:()=>{}};
    const videoId='bili:BV1a6Yx62EH4:p1';
@@ -40,8 +40,8 @@ const root=path.resolve(__dirname,'..');
      if(m.action==='translateContent') {api.paid++;return {success:true,translatedContent:{segments:m.content.segments.map(r=>({id:r.id,text:'中文译文：'+r.text}))}};}
      return {success:true};
    };
-   window.chrome={storage:{local,session:local},runtime:{sendMessage,onMessage:event,getURL:s=>'http://digest.test/'+s},windows:{getCurrent:async()=>({id:1})},tabs:{query:async()=>[{id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/',active:true,windowId:1}],get:async()=>({id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/'}),onUpdated:event,onActivated:event,sendMessage:async(_id,m)=>{if(api.connectionError)throw Error('Receiving end does not exist.');return m.action==='getCurrentTime'?{success:true,currentTime:api.time,paused:true}:{success:true};},create:async()=>({})},permissions:{request:async()=>{api.permissionGranted=true;return true;},contains:async()=>!api.connectionError||!!api.permissionGranted}};
- });
+   window.chrome={storage:{local,session:local},runtime:{sendMessage,onMessage:event,getURL:s=>'http://digest.test/'+s,getManifest:()=>({version})},windows:{getCurrent:async()=>({id:1})},tabs:{query:async()=>[{id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/',active:true,windowId:1}],get:async()=>({id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/'}),onUpdated:event,onActivated:event,sendMessage:async(_id,m)=>{if(api.connectionError)throw Error('Receiving end does not exist.');return m.action==='getCurrentTime'?{success:true,currentTime:api.time,paused:true}:{success:true};},create:async()=>({})},permissions:{request:async()=>{api.permissionGranted=true;return true;},contains:async()=>!api.connectionError||!!api.permissionGranted}};
+ }, {version:JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')).version});
  const page=await context.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://digest.test/sidepanel.html');
  await page.locator('#transcriptList .transcript-entry').first().waitFor();
@@ -69,12 +69,14 @@ const root=path.resolve(__dirname,'..');
  await page.fill('#transcriptSearchInput','第 2 节');
  await page.locator('mark').first().waitFor();
  await page.fill('#transcriptSearchInput','');
- await page.click('#cleanTranscriptBtn');await page.waitForFunction(()=>!studyState.busy&&studyState.cleaned.length>0);
- assert.equal(await page.locator('#cleanModeBtn').getAttribute('class'),'enhance-btn active');
- const paid=await page.evaluate(()=>__api.paid);await page.click('#rawModeBtn');assert.equal(await page.locator('#transcriptList .transcript-entry').count(),14);
- await page.click('#cleanTranscriptBtn');await page.waitForFunction(()=>!studyState.busy);assert.equal(await page.evaluate(()=>__api.paid),paid);
- await page.click('#rawModeBtn');
- await page.screenshot({path:path.join(root,'dist','reader-preview.png')});
+ // Cleanup is intentionally unavailable; hiding the UI must not leave a paid path.
+ for (const id of ['rawModeBtn','cleanModeBtn','cleanTranscriptBtn','stopStudyBtn','studyTaskControls','studyStatus']) assert.equal(await page.locator('#'+id).isVisible(),false,id);
+ await page.evaluate(()=>runStudyTask('cleanup'));
+ assert.equal(await page.evaluate(()=>__api.paid),0);
+ assert.equal(await page.evaluate(()=>__api.calls.some(m=>m.action==='studyAiBatch')),false);
+ assert.equal(await page.locator('#transcriptList .transcript-entry').count(),14);
+ await page.locator('#contentArea').evaluate(el=>el.scrollTop=0);
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist','reader-preview.png')});
  // Long source, one failed batch, retry from cached successes, no silent truncation.
  await page.evaluate(()=>{__api.count=330;__api.failNext=true;currentTranscript=Array.from({length:330},(_,i)=>({text:`字幕${i}。`+'完整保留这段学习材料，避免概览遗漏结尾。'.repeat(3),start:i*20,duration:20}));studyState.key='';renderTranscript();});
  await page.click('[data-tab=overview]');await page.click('#generateOverviewBtn');await page.waitForFunction(()=>!studyState.busy);
@@ -88,6 +90,7 @@ const root=path.resolve(__dirname,'..');
  assert.ok(await page.locator('#chapterList details p').last().isVisible());
  await page.screenshot({path:path.join(root,'dist','overview-preview.png')});
  await page.locator('#contentArea').evaluate(el=>el.scrollTop=0);
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist','overview-ui-v017.png')});
  await page.click('#quotesList button:last-child');await page.waitForFunction(()=>__api.notes.length>0);
  // Track switching clears stale overview and preserves the raw-first rule.
  await page.selectOption('#subtitleTrack','en');await page.waitForFunction(()=>currentTranscriptLanguage==='en');
@@ -97,13 +100,19 @@ const root=path.resolve(__dirname,'..');
  await page.click('[data-transcript-mode=bilingual]');await page.waitForFunction(()=>transcriptParagraphCache.size>0);
  await page.click('[data-tab=notes]');await page.locator('#notesList .note-text').first().waitFor();
  assert.doesNotMatch(await page.locator('#notesList').innerText(),/Translating|Waiting for translation/);
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist','notes-ui-v017.png')});
  await page.click('[data-tab=transcript]');
  let confirmation=false;page.once('dialog',async d=>{confirmation=true;await d.dismiss();});await page.click('#exportTranscriptBtn');assert.equal(confirmation,true);
  await page.click('[data-transcript-mode=original]');
+ await page.click('#translateAllBtn');await page.waitForFunction(()=>!studyState.busy);
+ assert.equal(await page.evaluate(()=>getActiveTranscriptSegments().every(s=>transcriptParagraphCache.has(transcriptTranslationCacheKey(s)))),true);
+ assert.equal(await page.locator('#stopStudyBtn').isVisible(),false);
  // Stop allows the in-flight batch to settle but sends no subsequent batches.
  await page.evaluate(()=>{__api.cache={};__api.delay=150;});
- await page.click('#cleanTranscriptBtn');await page.click('#stopStudyBtn');await page.waitForFunction(()=>!studyState.busy);
+ await page.click('[data-tab=overview]');await page.click('#generateOverviewBtn');await page.click('#stopStudyBtn');await page.waitForFunction(()=>!studyState.busy);
  assert.match(await page.locator('#studyStatus').innerText(),/已停止/);
+ assert.equal(await page.locator('#stopStudyBtn').isVisible(),false);
+ await page.click('[data-tab=transcript]');
  await page.evaluate(async()=>{
    await chrome.storage.local.clear();currentAnalysis=null;
    __api.fetchFailure={success:false,error:'BILI_PAGE_PERMISSION',message:'浏览器拒绝访问页面',detail:'Cannot access contents of url'};
@@ -122,7 +131,7 @@ const root=path.resolve(__dirname,'..');
  assert.deepEqual(await page.evaluate(()=>__api.permissionOrigins),require('../platforms.js').BILI_SERVICE_ORIGINS);
  assert.equal(await page.locator('#errorState').isVisible(),false);
  assert.deepEqual(errors,[]);
- console.log('PASS: raw-first / explicit AI / search / cleanup toggle / cache / long overview / partial retry / track / export / stop / narrow layout');
+ console.log('PASS: raw-first / cleanup disabled / explicit AI / search / cache / long overview / partial retry / track / export / stop / narrow layout');
  // Short platform cues must read as paragraphs without losing their identity.
  const reader=await context.newPage();reader.on('pageerror',e=>errors.push(e.message));
  await reader.goto('http://digest.test/sidepanel.html');
@@ -179,7 +188,10 @@ const root=path.resolve(__dirname,'..');
  await reader.waitForFunction(()=>document.querySelector('.active-playback')?.dataset.segmentId==='s5');
  assert.equal(await reader.locator('.active-playback').count(),1);
  assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- await reader.screenshot({path:path.join(root,'dist','paragraph-reading-v015.png')});
+ await reader.screenshot({animations:'disabled',path:path.join(root,'dist','reader-ui-v017-360.png')});
+ await reader.setViewportSize({width:440,height:880});
+ assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await reader.screenshot({animations:'disabled',path:path.join(root,'dist','reader-ui-v017-440.png')});
  assert.deepEqual(errors,[]);
  console.log('PASS: paragraph grouping / exact source text / sentence highlight and seek / selection / cross-cue search / anchored layout switch / zero AI / narrow layout');
  // Floating entry is also tested in a browser DOM after SPA changes and removal.

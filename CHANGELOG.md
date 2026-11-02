@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.7 — 2026-11-02
+
+- 侧栏改为雾蓝与白底，保留原有布局；统一中文字体、细线标签和轻量按钮，减少阴影与装饰。
+- 暂时隐藏 AI 整理断句、原始／整理结果切换和空闲任务提示，侧栏整理入口不再发起请求。原文段落排版继续在本地完成。
+- 字幕来源改为易读的语言名称；翻译与概览运行时才显示停止按钮，保留进度、失败与重试提示。
+- 保留播放高亮、搜索、翻译、概览、摘录与导出；同步更新中英文使用说明。
+
+A slate-blue sidebar with quieter reading controls. AI cleanup is temporarily unavailable; local paragraph layout, playback synchronization, translation and overview generation remain available.
+
 ## v0.1.6 — 2026-11-02
 
 - 产品更名为 **BiliMemo**，同步更新扩展名称、设置、浮动按钮、导出署名和中英文说明。
