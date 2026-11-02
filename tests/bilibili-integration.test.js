@@ -45,6 +45,14 @@ test("Bilibili transcript routing works with empty settings and binds the suppli
   assert.ok(h.http.calls.some(call=>call.url.pathname==='/x/player/wbi/v2'));
 });
 
+test('background forwards explicit refresh through to all subtitle HTTP requests', async () => {
+  const h=backgroundHarness();
+  const result=await h.sandbox.handleFetchTranscript(id,7,null,true);
+  assert.equal(result.success,true);
+  assert.ok(h.http.calls.length>=3);
+  for(const call of h.http.calls) assert.equal(call.options.cache,'no-store');
+});
+
 test("background rejects mismatched part rather than fetching another open video", async () => {
   const h = backgroundHarness(DIGEST_VIDEO.url("bili:BV1a6Yx62EH4:p1"));
   assert.equal((await h.sandbox.handleFetchTranscript(id, 7)).error, "VIDEO_CHANGED");

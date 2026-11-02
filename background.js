@@ -376,7 +376,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   // We need to return true to indicate we'll respond asynchronously
   if (message.action === "fetchTranscript") {
-    handleFetchTranscript(message.videoId, message.tabId ?? sender.tab?.id, message.trackId)
+    handleFetchTranscript(message.videoId, message.tabId ?? sender.tab?.id, message.trackId, Boolean(message.forceRefresh))
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true; // Keep the message channel open for async response
@@ -709,7 +709,7 @@ async function getPlayerVideoDetails(tabId) {
  * @param {string} videoId - The YouTube video ID (e.g., "dQw4w9WgXcQ")
  * @returns {Object} - { success, transcript, transcriptText, language } or { success: false, error }
  */
-async function readBilibili(videoId, requestedTabId, includeTranscript = true, trackId = null) {
+async function readBilibili(videoId, requestedTabId, includeTranscript = true, trackId = null, forceRefresh = false) {
   try {
     const tabs = Number.isInteger(requestedTabId)
       ? [await chrome.tabs.get(requestedTabId)]
@@ -719,7 +719,7 @@ async function readBilibili(videoId, requestedTabId, includeTranscript = true, t
     if (chrome.permissions && !await chrome.permissions.contains({origins:DIGEST_VIDEO.BILI_SERVICE_ORIGINS})) {
       return {success:false,error:'BILI_SERVICE_PERMISSION',message:'新版改为从 B 站官方字幕服务读取。请点击下方按钮允许这些服务的访问权限。'};
     }
-    const result = await DIGEST_BILI_BACKGROUND.read(videoId,includeTranscript,trackId);
+    const result = await DIGEST_BILI_BACKGROUND.read(videoId,includeTranscript,trackId,{forceRefresh});
     const after=await chrome.tabs.get(tab.id);
     if(DIGEST_VIDEO.parse(after.url)?.id!==videoId)return {success:false,error:'VIDEO_CHANGED',message:'读取时视频已切换，请重试。'};
     return result;
@@ -730,9 +730,9 @@ async function readBilibili(videoId, requestedTabId, includeTranscript = true, t
   }
 }
 
-async function handleFetchTranscript(videoId, tabId, trackId) {
+async function handleFetchTranscript(videoId, tabId, trackId, forceRefresh = false) {
   if (DIGEST_VIDEO.fromId(videoId)?.platform === "bilibili") {
-    return readBilibili(videoId, tabId, true, trackId);
+    return readBilibili(videoId, tabId, true, trackId, forceRefresh);
   }
   try {
     const settings = await getSettings();
@@ -758,6 +758,7 @@ async function handleFetchTranscript(videoId, tabId, trackId) {
     // Make the API request
     const response = await fetch(apiUrl.toString(), {
       method: "GET",
+      cache: forceRefresh ? 'no-store' : 'default',
       headers: {
         "x-api-key": settings.supadataApiKey,
       },

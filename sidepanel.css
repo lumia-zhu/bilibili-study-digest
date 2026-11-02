@@ -198,8 +198,9 @@ body {
    CONTENT AREA
    ============================================================ */
 .content {
+  --content-top: 24px;
   flex: 1;
-  padding: 24px 22px 28px;
+  padding: var(--content-top) 22px 28px;
   overflow-y: auto;
   min-height: 0;
   scrollbar-gutter: stable;
@@ -901,7 +902,7 @@ body {
 }
 
 /* Reading layout keeps each timed source fragment as its own inline node. */
-.transcript-layout-controls { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 3px; padding: 7px 0; margin: 0 0 12px; background: var(--bg); font-size: 12px; color: var(--text-secondary); }
+.transcript-layout-controls { position: sticky; top: calc(-1 * var(--content-top)); z-index: 2; display: flex; align-items: center; gap: 3px; padding: 7px 0; margin: 0 0 12px; background: var(--bg); font-size: 12px; color: var(--text-secondary); }
 .transcript-layout-controls > span { margin-right: 8px; }
 .transcript-layout-controls button { border: 1px solid transparent; border-radius: 4px; padding: 4px 10px; background: transparent; color: var(--text-secondary); font: inherit; cursor: pointer; }
 .transcript-layout-controls button[aria-pressed="true"] { background: var(--accent-dim); border-color: transparent; color: var(--accent); font-weight: 600; }
@@ -912,8 +913,7 @@ body {
 }
 .paragraph-time:hover { color: var(--accent); }
 .reading-paragraph-copy { font-family: var(--font-reading); font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
-.reading-pause::before { content: "，"; color: var(--text); }
-.reading-pause { user-select: none; }
+.reading-gap { margin-inline-end: 3px; user-select: none; }
 .paragraph-mode .transcript-entry { display: inline; padding: 2px 0; margin: 0; border: 0; border-radius: 3px; box-shadow: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .paragraph-mode .transcript-entry .transcript-time { display: none; }
 .paragraph-mode .transcript-text { font-size: inherit; line-height: inherit; color: var(--text); }
@@ -922,6 +922,17 @@ body {
 .paragraph-mode .transcript-copy, .paragraph-mode:not(.bilingual-reading) .transcript-translation { display: inline; }
 .paragraph-mode.bilingual-reading .transcript-entry { display: block; padding: 4px 0; }
 .paragraph-mode.bilingual-reading .transcript-original + .transcript-translation { margin-top: 2px; padding-top: 0; border-top: 0; }
+
+/* Follow reading uses the original cues, not inferred sentence boundaries. */
+.follow-mode .transcript-entry { display: block; padding: 5px 10px; margin: 0 0 2px; border-left: 2px solid transparent; border-radius: 3px; }
+.follow-mode .transcript-entry .transcript-time { display: none; }
+.follow-mode .transcript-text, .follow-mode .transcript-original, .follow-mode .transcript-translation { font-size: 16px; line-height: 1.65; color: #536174; }
+.follow-mode .transcript-entry.active-playback { background: #edf8ff; border-left-color: #2d96d2; }
+.follow-mode .active-playback .transcript-text, .follow-mode .active-playback .transcript-original { color: #1b4b6b; }
+.reading-time-marker { display: block; padding: 0; margin: 12px 12px 5px; border: 0; background: transparent; color: var(--text-muted); font: 400 10px/1.5 var(--font-mono); cursor: pointer; }
+.reading-time-marker:first-child { margin-top: 0; }
+.reading-time-marker:hover { color: var(--accent); }
+.reading-time-marker:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* Follow playback button — floating pill */
 .follow-playback-btn {
@@ -1597,6 +1608,9 @@ button:disabled { cursor: default; }
 }
 .export-preference input { accent-color: var(--accent); width: 13px; height: 13px; }
 #subtitleSource { font-size: 11px; color: var(--text-secondary); }
+.study-source-row { justify-content: space-between; }
+.study-source-row #subtitleSource { flex: 1; min-width: 0; }
+#refreshTranscriptBtn { flex: 0 0 auto; white-space: nowrap; }
 #generateOverviewBtn { color: white; background: var(--accent); border-color: var(--accent); }
 #generateOverviewBtn:hover:not(:disabled) { background: var(--accent-hover); }
 .study-chapter summary { font-size: 14px; }
@@ -1607,7 +1621,7 @@ button:disabled { cursor: default; }
   .header { padding: 16px 16px 0; }
   .header-top { flex-wrap: nowrap; gap: 10px; }
   .header-actions { gap: 5px 8px; }
-  .content { padding: 20px 16px 24px; }
+  .content { --content-top: 20px; padding: var(--content-top) 16px 24px; }
   .study-toolbar { padding: 9px 16px; }
   .transcript-section-header { flex-wrap: wrap; }
   .transcript-actions { flex-wrap: wrap; }

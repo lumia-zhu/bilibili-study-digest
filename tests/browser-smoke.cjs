@@ -28,7 +28,12 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
      api.calls.push(m);
      if(m.action==='repairPlaybackConnection'){api.connectionError=false;return {success:true};}
      if(m.action==='relayToContent') return {success:true,response:m.payload.action==='getCurrentTime'?{currentTime:api.time,paused:true}:{title:'学习视频示例：先理解原文，再按需使用 AI',channelName:'测试字幕 · 模拟数据',duration:7200}};
-     if(m.action==='fetchTranscript') {if(api.fetchFailure)return api.fetchFailure;api.track=m.trackId||'zh';const transcript=rows();return {success:true,transcript,transcriptText:transcript.map(r=>r.text).join('\n'),transcriptTextTimestamped:'fixture',language:api.track,source:{version:2,videoId,part:1,cid:'123',bvid:'BV1a6Yx62EH4',endpoint:'wbi/v2',trackId:api.track},tracks:[{id:'zh',name:'中文',ai:true},{id:'en',name:'English',ai:false}]};}
+     if(m.action==='fetchTranscript') {
+       api.track=m.trackId||'zh';const transcript=rows();
+       const result=api.fetchFailure||api.fetchResult||{success:true,transcript,transcriptText:transcript.map(r=>r.text).join('\n'),transcriptTextTimestamped:'fixture',language:api.track,source:{version:2,videoId,part:1,cid:'123',bvid:'BV1a6Yx62EH4',endpoint:'wbi/v2',trackId:api.track},tracks:[{id:'zh',name:'中文',ai:true},{id:'en',name:'English',ai:false}]};
+       if(api.fetchDelay)await new Promise(r=>setTimeout(r,api.fetchDelay));
+       api.lastFetchResult=result;return result;
+     }
      if(m.action==='getNotes') return {success:true,notes:api.notes};
      if(m.action==='saveNote'){const note={id:String(api.notes.length),text:m.selectedText,videoId,videoTitle:'学习视频',timestamp:'0:00',timestampedUrl:'https://www.bilibili.com/video/BV1a6Yx62EH4/?t=0',createdAt:Date.now()};api.notes.push(note);return {success:true,note};}
      if(m.action==='studyAiBatch') {
@@ -137,6 +142,8 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  const reader=await context.newPage();reader.on('pageerror',e=>errors.push(e.message));
  await reader.goto('http://digest.test/sidepanel.html');
  await reader.locator('.transcript-entry').first().waitFor();
+ assert.equal(await reader.locator('[data-reading-layout=sentence]').getAttribute('aria-pressed'),'true');
+ await reader.getByRole('button',{name:'段落',exact:true}).click();
  const original=await reader.evaluate(()=>{
    const send=chrome.tabs.sendMessage;
    chrome.tabs.sendMessage=(tabId,message,...args)=>{if(message.action==='seekTo')__api.calls.push({payload:message});return send(tabId,message,...args);};
@@ -171,16 +178,27 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  assert.equal(await reader.locator('mark.current').count(),2);
  await reader.fill('#transcriptSearchInput','');
  await reader.evaluate(()=>{autoScrollEnabled=false;document.getElementById('contentArea').scrollTop=650;});
+ const stickyGap=await reader.evaluate(()=>document.querySelector('.transcript-layout-controls').getBoundingClientRect().top-document.getElementById('contentArea').getBoundingClientRect().top);
+ assert.ok(Math.abs(stickyGap)<1,`sticky toolbar must cover the content padding: ${stickyGap}px`);
  const anchor=await reader.evaluate(()=>{
    const top=document.querySelector('.transcript-layout-controls').getBoundingClientRect().bottom;
    const row=[...document.querySelectorAll('.transcript-entry')].find(r=>r.getBoundingClientRect().bottom>top+1);
    return {id:row.dataset.segmentId,top:row.getBoundingClientRect().top};
  });
- await reader.getByRole('button',{name:'逐句',exact:true}).click();
+ await reader.getByRole('button',{name:'跟读',exact:true}).click();
  assert.equal(await reader.locator('.reading-paragraph').count(),0);
- assert.equal(await reader.locator('.transcript-entry .transcript-time:visible').count(),original.length);
+ assert.equal(await reader.locator('.transcript-entry .transcript-time:visible').count(),0);
+ assert.equal(await reader.locator('.reading-time-marker').count(),4);
+ assert.equal(await reader.locator('.transcript-text').first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
+ assert.equal(await reader.locator('.transcript-entry').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'2px');
  assert.ok(Math.abs(await reader.locator(`[data-segment-id=${anchor.id}]`).evaluate(el=>el.getBoundingClientRect().top)-anchor.top)<4);
  assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),original);
+ await reader.locator('.reading-time-marker').nth(1).click();
+ assert.equal(await reader.evaluate(()=>__api.calls.filter(m=>m.payload?.action==='seekTo').at(-1)?.payload.seconds),15.6);
+ await reader.locator('[data-segment-id=s4]').press('Enter');
+ assert.equal(await reader.evaluate(()=>__api.calls.filter(m=>m.payload?.action==='seekTo').at(-1)?.payload.seconds),4.8);
+ await reader.evaluate(async()=>{await saveCurrentTranscriptViewState();__api.savedView=await loadTranscriptViewState(currentVideoId);});
+ assert.equal(await reader.evaluate(()=>__api.savedView.layout),'sentence');
  await reader.getByRole('button',{name:'段落',exact:true}).click();
  assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),original);
  assert.equal(await reader.evaluate(()=>__api.paid),0);
@@ -195,8 +213,8 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`reader-ui-v${version}-440.png`)});
  assert.deepEqual(errors,[]);
  console.log('PASS: paragraph grouping / exact source text / sentence highlight and seek / selection / cross-cue search / anchored layout switch / zero AI / narrow layout');
- // A generated comma must be visible but absent from selection/search/export.
- const pauseTexts=await reader.evaluate(()=>{
+ // A visual micro-gap must not add characters to selection/search/export.
+ const spacedTexts=await reader.evaluate(()=>{
    const nativePlan=STUDY.readingPlan;__api.planCalls=0;
    STUDY.readingPlan=segments=>{__api.planCalls++;return nativePlan(segments);};
    const texts=['很多时候问题并不是看得太少','而是看完以后没有把信息整理成自己的理解。',
@@ -209,9 +227,9 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
    __api.savedPlan=transcriptReadingPlan;
    return texts;
  });
- assert.ok(await reader.locator('.reading-pause').count()>=2);
- assert.equal(await reader.locator('.reading-pause').first().evaluate(el=>getComputedStyle(el,'::before').content),'"，"');
- assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),pauseTexts);
+ assert.ok(await reader.locator('.reading-gap').count()>=2);
+ assert.equal(await reader.locator('.reading-gap').first().evaluate(el=>getComputedStyle(el).marginInlineEnd),'3px');
+ assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),spacedTexts);
  assert.doesNotMatch(await reader.locator('#transcriptList').textContent(),/，/);
  await reader.fill('#transcriptSearchInput','太少而是');
  assert.equal(await reader.locator('#transcriptSearchCount').innerText(),'1 of 1');
@@ -225,7 +243,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
    document.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
    return selection.toString();
  });
- assert.equal(selectionText,pauseTexts[0]+pauseTexts[1]);
+ assert.equal(selectionText,spacedTexts[0]+spacedTexts[1]);
  await reader.locator('.selection-note-btn').click();
  await reader.waitForFunction(()=>__api.notes.length===1);
  assert.equal(await reader.evaluate(()=>__api.notes[0].text),selectionText);
@@ -237,11 +255,11 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  });
  await reader.click('#copyTranscriptBtn');await reader.click('#exportTranscriptBtn');
  const outputs=await reader.evaluate(()=>[__api.copied,__api.exported.text]);
- for(const text of outputs) {assert.doesNotMatch(text,/，/);for(const source of pauseTexts) assert.ok(text.includes(source));}
- await reader.getByRole('button',{name:'逐句',exact:true}).click();
- assert.equal(await reader.locator('.reading-pause').count(),0);
+ for(const text of outputs) {assert.doesNotMatch(text,/，/);for(const source of spacedTexts) assert.ok(text.includes(source));}
+ await reader.getByRole('button',{name:'跟读',exact:true}).click();
+ assert.equal(await reader.locator('.reading-gap').count(),0);
  await reader.getByRole('button',{name:'段落',exact:true}).click();
- assert.ok(await reader.locator('.reading-pause').count()>=2);
+ assert.ok(await reader.locator('.reading-gap').count()>=2);
  await reader.evaluate(()=>{__api.time=4.8;document.getElementById('contentArea').scrollTop=0;});
  await reader.waitForFunction(()=>document.querySelector('.active-playback')?.dataset.segmentId==='s1');
  assert.equal(await reader.evaluate(()=>__api.planCalls),1);
@@ -250,14 +268,113 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  for (const width of [360,440]) {
    await reader.setViewportSize({width,height:880});
    assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-   await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`pause-reading-v${version}-${width}.png`)});
+   await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`spaced-reading-v${version}-${width}.png`)});
  }
  await reader.selectOption('#subtitleTrack','en');await reader.waitForFunction(()=>currentTranscriptLanguage==='en');
- assert.equal(await reader.locator('.reading-pause').count(),0);
+ assert.equal(await reader.locator('.reading-gap').count(),0);
  assert.equal(await reader.evaluate(()=>transcriptReadingPlan===__api.savedPlan),false);
  assert.equal(await reader.evaluate(()=>__api.planCalls),2);
- console.log('PASS: visual-only commas / raw selection and excerpts / copy and export / cross-comma search / cached layout / source invalidation / no AI');
+ console.log('PASS: visual-only micro-gaps / raw selection and excerpts / copy and export / cross-gap search / cached layout / source invalidation / no AI');
+ // Refresh is a provider request, not a cache reopen, and failure is atomic.
+ const refreshing=await context.newPage();refreshing.on('pageerror',e=>errors.push(e.message));
+ await refreshing.goto('http://digest.test/sidepanel.html');await refreshing.locator('.transcript-entry').first().waitFor();
+ await refreshing.evaluate(async()=>{currentAnalysis={chapters:[],summaries:[],keyQuotes:[],sentinel:'keep'};__api.notes=[{id:'saved',text:'保留摘录'}];await saveToCache(currentVideoId);});
+ const countFetch=()=>refreshing.evaluate(()=>__api.calls.filter(m=>m.action==='fetchTranscript').length);
+ const refresh=async()=>{await refreshing.getByRole('button',{name:'刷新字幕',exact:true}).click();await refreshing.waitForFunction(()=>!subtitleReloadRequest);};
+ let count=await countFetch();await refresh();assert.equal(await countFetch(),count+1);
+ assert.equal(await refreshing.evaluate(()=>currentAnalysis.sentinel),'keep');
+ assert.equal(await refreshing.evaluate(()=>__api.calls.filter(m=>m.action==='fetchTranscript').at(-1).forceRefresh),true);
+ assert.equal(await refreshing.evaluate(()=>__api.calls.filter(m=>m.action==='fetchTranscript').at(-1).trackId),'zh');
+ await refreshing.evaluate(()=>{__api.count=17;});await refresh();
+ assert.equal(await refreshing.locator('.transcript-entry').count(),17);
+ assert.equal(await refreshing.evaluate(()=>currentAnalysis),null);
+ assert.equal(await refreshing.evaluate(async()=> (await chrome.storage.local.get(`digest_${currentVideoId}`))[`digest_${currentVideoId}`].transcript.length),17);
+ for(const failure of ['network','wrong-video','empty']) {
+   await refreshing.evaluate(failure=>{__api.fetchFailure=failure==='network'?{success:false,message:'模拟网络失败'}:null;__api.fetchResult=failure==='wrong-video'?{...__api.lastFetchResult,success:true,source:{...currentTranscriptSource,videoId:'bili:BV11eHF6vE86:p1'}}:failure==='empty'?{success:true,source:currentTranscriptSource,transcript:[]}:null;},failure);
+   await refresh();assert.equal(await refreshing.locator('.transcript-entry').count(),17);
+   assert.match(await refreshing.locator('#studyStatus').innerText(),/已保留当前字幕/);
+   assert.equal(await refreshing.evaluate(async()=> (await chrome.storage.local.get(`digest_${currentVideoId}`))[`digest_${currentVideoId}`].transcript.length),17);
+ }
+ await refreshing.evaluate(()=>{__api.fetchFailure=null;__api.fetchResult=null;__api.fetchDelay=150;});
+ count=await countFetch();await refreshing.getByRole('button',{name:'刷新字幕',exact:true}).click();
+ assert.equal(await refreshing.locator('#refreshTranscriptBtn').isDisabled(),true);
+ assert.equal(await refreshing.locator('.transcript-entry').count(),17);
+ await refreshing.evaluate(()=>refreshStudyTranscript());await refreshing.waitForFunction(()=>!subtitleReloadRequest);
+ assert.equal(await countFetch(),count+1);
+ await refreshing.evaluate(async()=>{
+   const timer=window.setTimeout;window.setTimeout=(fn,ms,...args)=>timer(fn,ms===30000?5:ms,...args);
+   try {await refreshStudyTranscript();} finally {window.setTimeout=timer;}
+ });
+ assert.match(await refreshing.locator('#studyStatus').innerText(),/超时/);
+ await refreshing.waitForTimeout(170);assert.equal(await refreshing.locator('.transcript-entry').count(),17);
+ assert.equal(await refreshing.locator('#refreshTranscriptBtn').isDisabled(),false);
+ assert.equal(await refreshing.evaluate(()=>__api.notes[0].text),'保留摘录');
+ assert.equal(await refreshing.evaluate(()=>__api.paid),0);
+ await refreshing.evaluate(async()=>{
+   const pending=refreshStudyTranscript();currentVideoId='bili:BV11eHF6vE86:p1';digestGeneration++;
+   currentTranscript=[{text:'新视频的字幕',start:0,duration:1}];studyStatus('新视频状态');await pending;
+ });
+ assert.equal(await refreshing.evaluate(()=>currentTranscript[0].text),'新视频的字幕');
+ assert.equal(await refreshing.locator('#studyStatus').innerText(),'新视频状态');
+ console.log('PASS: refresh bypasses cache / preserves selected track and unchanged overview / invalidates stale overview / errors retain old captions / double-click / timeout / stale response / notes / zero AI');
+ const dense=await context.newPage();dense.on('pageerror',e=>errors.push(e.message));
+ await dense.goto('http://digest.test/sidepanel.html');await dense.locator('.transcript-entry').first().waitFor();
+ const fixture=process.env.READING_FIXTURE?JSON.parse(fs.readFileSync(process.env.READING_FIXTURE,'utf8')):null;
+ const denseInfo=await dense.evaluate(fixture=>{
+   currentTranscript=fixture?.transcript||Array.from({length:610},(_,i)=>({text:'这是平台提供的连续字幕内容',start:i*2,duration:2}));
+   currentTranscriptLanguage=fixture?.language||'ai-zh';currentTranscriptText=currentTranscript.map(r=>r.text).join('');
+   currentVideoTitle=fixture?.info?.title||'连续字幕阅读 · 模拟数据';document.getElementById('videoTitle').textContent=currentVideoTitle;
+   if(fixture) {
+     currentTranscriptTracks=fixture.tracks;currentTranscriptSource={...currentTranscriptSource,trackId:fixture.source.trackId};
+     document.getElementById('videoChannel').textContent=fixture.info.channelName+' · 实际字幕预览';
+   }
+   studyState.key='';transcriptReadingLayout='paragraph';renderTranscript();autoScrollEnabled=false;document.getElementById('contentArea').scrollTop=0;
+   const index=[...transcriptReadingPlan.spaceBefore][0];
+   const first=document.querySelector(`[data-segment-id=s${index-1}] .transcript-text`),last=document.querySelector(`[data-segment-id=s${index}] .transcript-text`);
+   const range=document.createRange();range.setStart(first,0);range.setEnd(last,last.childNodes.length);
+   const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+   const result={rows:currentTranscript.length,gaps:transcriptReadingPlan.spaceBefore.size,selected:selection.toString(),source:currentTranscript[index-1].text+currentTranscript[index].text};
+   selection.removeAllRanges();return result;
+ },fixture);
+ assert.ok(denseInfo.gaps>100);assert.equal(denseInfo.selected,denseInfo.source);
+ assert.equal(await dense.locator('.transcript-entry').count(),denseInfo.rows);
+ assert.equal(await dense.locator('.reading-gap').first().evaluate(el=>getComputedStyle(el).marginInlineEnd),'3px');
+ assert.equal(await dense.locator('.reading-pause, .reading-break').count(),0);
+ // At least one separated pair stays on the same line: gaps must not force
+ // newline or block layout, and the actual glyph spacing is three pixels.
+ const inlineGaps=await dense.evaluate(()=>[...document.querySelectorAll('.reading-gap')].map(gap=>{
+   const left=gap.previousElementSibling?.querySelector('.transcript-text');
+   const right=gap.nextElementSibling?.querySelector('.transcript-text');
+   if(!left||!right)return null;
+   const leftRect=Array.from(left.getClientRects()).at(-1),rightRect=right.getClientRects()[0];
+   return Math.abs(leftRect.top-rightRect.top)<1?rightRect.left-leftRect.right:null;
+ }).filter(value=>value!==null));
+ assert.ok(inlineGaps.length>20);
+ assert.ok(inlineGaps.every(gap=>Math.abs(gap-3)<0.5),JSON.stringify(inlineGaps.slice(0,5)));
+ for(const width of [360,580]) {
+   await dense.setViewportSize({width,height:880});
+   await dense.locator('#contentArea').evaluate(el=>el.scrollTop=0);
+   await dense.screenshot({animations:'disabled',path:path.join(root,'dist',`dense-reading-v${version}-${width}.png`)});
+   const gap=await dense.evaluate(()=>{const area=document.getElementById('contentArea');area.scrollTop=650;return document.querySelector('.transcript-layout-controls').getBoundingClientRect().top-area.getBoundingClientRect().top;});
+   assert.ok(Math.abs(gap)<1,`No clipped text above toolbar at ${width}px: ${gap}`);
+   await dense.screenshot({animations:'disabled',path:path.join(root,'dist',`dense-scrolled-v${version}-${width}.png`)});
+ }
+ console.log(`PASS: gapless reading / visual gaps preserve selected source / sticky padding coverage at 360px and 580px (${denseInfo.rows} captions, ${denseInfo.gaps} micro-gaps${fixture?', public Bilibili fixture':''})`);
+ await dense.getByRole('button',{name:'跟读',exact:true}).click();
+ assert.equal(await dense.locator('.reading-paragraph, .reading-gap').count(),0);
+ assert.equal(await dense.locator('.transcript-entry').count(),denseInfo.rows);
+ assert.ok(await dense.locator('.reading-time-marker').count()<denseInfo.rows/3);
+ for(const width of [360,580]) {
+   await dense.setViewportSize({width,height:880});
+   await dense.locator('#contentArea').evaluate(el=>el.scrollTop=0);
+   assert.equal(await dense.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   await dense.screenshot({animations:'disabled',path:path.join(root,'dist',`follow-reading-v${version}-${width}.png`)});
+ }
+ assert.equal(await dense.evaluate(()=>__api.paid),0);
+ console.log('PASS: follow reading / 16px source cues / sparse time markers / keyboard seek / saved layout / zero AI');
  if (process.env.READING_BASELINE) {
+   // Do not benchmark while unrelated fixture panels are polling playback.
+   await page.close();await refreshing.close();await dense.close();
    const source=fs.readFileSync(process.env.READING_BASELINE,'utf8');
    await reader.addScriptTag({content:`window.__readingBaseline=(()=>{${source}\nreturn STUDY;})();`});
    const timing=await reader.evaluate(()=>{
@@ -280,7 +397,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
          // new plan, including the extra paragraph and comma nodes + layout.
          for(let i=0;i<8;i++) {
            for(const newer of (i%2?[true,false]:[false,true])) {
-             STUDY.readingPlan=newer?currentPlan:s=>({groups:__readingBaseline.readingParagraphs(s),pauseBefore:new Set()});
+             STUDY.readingPlan=newer?currentPlan:s=>({groups:__readingBaseline.readingParagraphs(s),spaceBefore:new Set()});
              currentTranscript=raw;currentTranscriptMode='original';stopPlaybackTracking();
              const start=performance.now();renderTranscript();void document.getElementById('transcriptList').offsetHeight;
              const ms=performance.now()-start;stopPlaybackTracking();if(i>=2)(newer?newRender:oldRender).push(ms);

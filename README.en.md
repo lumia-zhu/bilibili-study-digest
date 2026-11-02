@@ -6,30 +6,32 @@
 
 A browser extension for reading captions, finding passages and reviewing key points alongside Bilibili videos. Useful for courses, interviews and other long videos.
 
-**Start with original captions in a paragraph layout. Use AI only when you choose to.** Reading, search and playback highlighting require no AI key and make no model calls.
+**Start with original captions in Follow mode, or switch to Paragraph mode to browse longer passages.** Both layouts, search and playback highlighting require no AI key. Translation and overview generation are available on request.
 
-[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.9) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
+[Download](https://github.com/lumia-zhu/bilibili-study-digest/releases) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **v0.1.9 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
+Current version: **v0.1.12 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
 | Feature | What it does | Uses AI? |
 |---|---|---|
-| Caption reader | Paragraph layout by default, sentence layout toggle and available caption tracks | No |
-| Playback synchronization | Highlights the current cue within its paragraph; click captions or timestamps to seek | No |
+| Caption reader | Follow and Paragraph layouts, with available caption tracks | No |
+| Playback synchronization | Highlights the current cue; click captions or timestamps to seek | No |
 | Search and review | Find caption keywords and return to the current playback position after scrolling | No |
 | Excerpts and export | Save timestamped original excerpts; copy or export TXT captions and Markdown excerpts | No |
 | Translation and explanation | Read English captions in Chinese or bilingually; explain selected text | On request |
 | Chapter overview | Generate chapters, key points and original quotes; process long captions in batches | On request |
 
-Local layout uses shorter paragraphs, usually around 60–90 Chinese characters. Long pauses can end a paragraph earlier; a single oversized cue stays intact. Conservative timing rules may display a few helper commas at clear pauses, without adding periods or spaces between Chinese fragments. These visual commas are excluded from selection, search, excerpts, copy and export. Original wording, cue timing and highlighting remain intact. No AI is used; AI cleanup remains hidden.
+Follow mode (跟读) preserves the platform's original cues, with 16 px text, compact spacing and a light blue playback highlight. Time markers appear roughly every 15 seconds; every cue remains clickable. New videos default to Follow mode. Previously viewed videos restore their saved layout and reading position.
+
+Paragraph mode (段落) uses shorter paragraphs, usually around 60–90 Chinese characters. Long pauses can end a paragraph earlier; a single oversized cue stays intact. Small visual gaps of about 3 px separate some Chinese cue groups, keeping tiny fragments together and avoiding obvious split numbers and joiners. Text wraps naturally to the panel width; no short lines or punctuation are inserted. The gaps add no characters to selection, search, excerpts, copy or export. Both layouts preserve original wording, cue timing and highlighting. No AI is used; AI cleanup remains hidden.
 
 ## Installation
 
 ### 1. Download and load the extension
 
-1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.9) and download **`bilimemo-v0.1.9.zip`** from the assets.
+1. Open the [release page](https://github.com/lumia-zhu/bilibili-study-digest/releases) and download **`bilimemo-v<version>.zip`** from the assets.
 2. Extract it into a permanent folder containing `manifest.json`. Do not select the ZIP itself.
 3. Open `edge://extensions` in Edge or `chrome://extensions` in Chrome.
 4. Enable **Developer mode**, choose **Load unpacked**, and select the extracted folder.
@@ -39,6 +41,8 @@ Local layout uses shorter paragraphs, usually around 60–90 Chinese characters.
 Refresh existing video tabs. Open the side panel using the floating **BiliMemo · 字幕** button or the extension's toolbar icon.
 
 Try original captions, keyword search, click-to-seek and saving an excerpt first. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
+
+Use **刷新字幕** beside the caption count to fetch the selected track again, bypassing local and browser HTTP caches. Existing captions stay readable while loading and are retained on failure or after a 30-second timeout. A successful refresh returns to Original mode. Unchanged captions keep their overview; changed text or timing clears the old overview for optional regeneration. Excerpts are preserved. Refreshing makes no model calls; YouTube refreshes use your configured Supadata service and quota.
 
 ### 3. Configure AI when needed
 
@@ -50,7 +54,7 @@ After updating, reload the extension and refresh video tabs. Keep the installati
 
 ## AI usage and costs
 
-- Opening a video, reading original captions, changing the paragraph/sentence layout or opening the overview tab does not invoke AI. Overview generation requires an explicit action.
+- Opening a video, reading original captions, switching Follow/Paragraph layouts or opening the overview tab does not invoke AI. Overview generation requires an explicit action.
 - Chinese/bilingual mode, full translation, explanations, overview generation and connection tests call the configured provider after a user action and may incur charges.
 - Cache hits avoid model calls. Retry can reuse successful batches; regenerating may incur further charges.
 - Stopping prevents later batches. Requests already sent, including failed requests, may still be billed.
@@ -83,7 +87,7 @@ The inherited YouTube workflow requires a separate Supadata key. Development and
 - Standard Bilibili BV video pages and multipart videos are supported. Live streams and series pages are outside the current scope.
 - Original captions, translations and different tracks are handled separately. Incomplete translation exports are explicitly identified.
 - Original excerpts can be saved and exported; a personal interpretation editor is not included.
-- Local rules do not guarantee semantic sentence boundaries. Without reliable pause timing, only paragraph length is adjusted. The fallback player clock has whole-second precision.
+- Local spacing rules do not guarantee semantic grouping and never rewrite captions. The fallback player clock has whole-second precision.
 - This is a development preview. The full real-video, login, live-model and store-installation matrix remains incomplete. See the [validation record](VALIDATION.md).
 
 ## Development

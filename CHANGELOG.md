@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.1.12 — 2026-11-02（开发预览）
+
+- 将「逐句」升级为「跟读」：保留原始片段，使用 16 px 字号、紧凑间距与浅蓝播放高亮，时间入口约每 15 秒显示一次；每条字幕仍可点击和使用键盘跳转。
+- 保留「段落」选项。新视频默认跟读，已有视频恢复保存的排版；切换时保留可见阅读位置。
+- 两种排版均不调用 AI、不改写源文字；播放跟随逻辑保持不变。
+- 一并发布 0.1.10 / 0.1.11 的本地迭代：字幕刷新、滚动遮挡修复和段内细间距。保留中英文说明、MIT 许可证与完整来源声明。
+
+Adds compact Follow reading with original cues, 16 px text and sparse time markers alongside the existing Paragraph layout. Both layouts use no AI. Saved layouts, source text and playback-follow behavior are preserved. This development preview also includes the caption refresh, sticky-layout fix and inline spacing from the local 0.1.10 / 0.1.11 iterations.
+
+## v0.1.11 — 2026-11-02（本地预览）
+
+- 用约 3 px 的段内细间距替换自动辅助逗号和强制短行，文字按侧栏宽度自然折行，保留段落间距。
+- 适度合并短碎片，尽量避开已有标点、拆开的数字与连接词；视觉间距不写入字幕，搜索、选择、摘录、复制与导出保持原文。
+- 本地计算，不调用 AI；播放跟随与高亮逻辑保持不变。暂未同步 GitHub。
+
+Replaces helper commas and forced short lines with subtle, display-only inline spacing. Natural wrapping, original text and playback-follow behavior are preserved. Local preview only.
+
+## v0.1.10 — 2026-11-02
+
+- 修复滚动后排版切换栏上方露出半行字幕的问题；窄侧栏与宽侧栏均对齐滚动区域顶部。
+- 为时间连续、缺少停顿的中文字幕加入显示层短行，沿用原始片段边界，不调用 AI、不改写原文。已有的停顿逗号、播放高亮和逐句跳转继续保留。
+- 在字幕条数旁新增「刷新字幕」，重新获取当前字幕轨并绕过本地及 HTTP 缓存；刷新时保留当前内容，防止重复提交，失败或超时不清空字幕，切换视频后丢弃迟到结果。
+- 内容未变化时保留概览；字幕文字、时间或轨道变化时清除旧概览。刷新回到原文模式，不自动发起翻译或概览请求，摘录保持不变。
+
+Fixes clipped text above the sticky layout controls, adds visual short lines for continuous captions, and provides an explicit caption refresh with cache bypass, failure retention and stale-response protection. No automatic model calls.
+
 ## v0.1.9 — 2026-11-02
 
 - 原始字幕改用较短段落，通常约 60～90 个汉字；优先利用已有标点与停顿分段。

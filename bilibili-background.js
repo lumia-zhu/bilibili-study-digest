@@ -7,7 +7,7 @@ var DIGEST_BILI_BACKGROUND = (() => {
   const captionHosts = new Set(['aisubtitle.hdslb.com','i0.hdslb.com','i1.hdslb.com','i2.hdslb.com','subtitle.bilibili.com']);
   const fail = (error,message) => ({success:false,error,message});
 
-  function checkedFetch(fetchImpl) {
+  function checkedFetch(fetchImpl, forceRefresh = false) {
     return async (input, options = {}) => {
       const url = new URL(input);
       const isApi = url.hostname === 'api.bilibili.com' && apiPaths.has(url.pathname);
@@ -15,14 +15,14 @@ var DIGEST_BILI_BACKGROUND = (() => {
         const error = new Error('字幕服务返回了不受支持的地址，已停止读取。'); error.code='BILI_SUBTITLE_HOST'; throw error;
       }
       // The browser attaches the Bilibili session. No cookies are read or copied.
-      return fetchImpl(url.href, {...options,credentials:isApi?'include':'omit',redirect:'error',signal:AbortSignal.timeout(20000)});
+      return fetchImpl(url.href, {...options,...(forceRefresh ? {cache:'no-store'} : {}),credentials:isApi?'include':'omit',redirect:'error',signal:AbortSignal.timeout(20000)});
     };
   }
 
-  async function read(videoId, includeTranscript = true, trackId = null, {fetchImpl = fetch} = {}) {
+  async function read(videoId, includeTranscript = true, trackId = null, {fetchImpl = fetch, forceRefresh = false} = {}) {
     const identity = video.fromId(videoId);
     if (identity?.platform !== 'bilibili') return fail('INVALID_BVID','无法识别当前 B 站视频。');
-    const request = checkedFetch(fetchImpl);
+    const request = checkedFetch(fetchImpl, forceRefresh);
     let info;
     try {
       const metadata = await api.fetchVideoInfo(identity.video,{fetchImpl:request,page:identity.part});

@@ -71,7 +71,11 @@
     </div>
 
     <div id="studyToolbar" class="study-toolbar" hidden>
-      <div class="study-tools"><span id="subtitleSource">原始字幕优先 · AI 按需使用</span><select id="subtitleTrack" aria-label="字幕轨" hidden></select></div>
+      <div class="study-tools study-source-row">
+        <span id="subtitleSource">原始字幕优先 · AI 按需使用</span>
+        <button type="button" id="refreshTranscriptBtn" class="enhance-btn" title="重新获取当前字幕，失败时保留已有内容">刷新字幕</button>
+      </div>
+      <select id="subtitleTrack" aria-label="字幕轨" hidden></select>
       <div class="study-tools" id="studyTaskControls" hidden>
         <button id="rawModeBtn" class="enhance-btn active" hidden disabled>原始字幕</button>
         <button id="cleanModeBtn" class="enhance-btn" hidden disabled>整理结果</button>
@@ -131,8 +135,8 @@
             </div>
             <div class="transcript-layout-controls" role="group" aria-label="字幕排版">
               <span>阅读排版</span>
-              <button type="button" data-reading-layout="paragraph" aria-pressed="true" title="按停顿和长度分段，逗号仅辅助阅读；复制和导出保留原文，不调用 AI">段落</button>
-              <button type="button" data-reading-layout="sentence" aria-pressed="false" title="逐条显示平台原始字幕时间">逐句</button>
+              <button type="button" data-reading-layout="sentence" aria-pressed="true" title="保留原始字幕片段，突出当前播放内容；不调用 AI">跟读</button>
+              <button type="button" data-reading-layout="paragraph" aria-pressed="false" title="短段落与细间距阅读，自然换行；复制和导出保留原文，不调用 AI">段落</button>
             </div>
             <!-- Search stays inside the Transcript tab and never changes playback. -->
             <div class="transcript-search" role="search">

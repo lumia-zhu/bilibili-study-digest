@@ -578,7 +578,7 @@ async function startDigest(videoId, videoUrl) {
     const nextDisplayMode = await loadDisplayLanguageMode(videoId);
     if (generation !== digestGeneration) return;
     pendingTranscriptViewState = nextViewState;
-    transcriptReadingLayout = nextViewState?.layout || 'paragraph';
+    transcriptReadingLayout = nextViewState?.layout || 'sentence';
     currentTranscriptMode = nextDisplayMode;
     document
       .getElementById("contentArea")
@@ -2819,7 +2819,7 @@ function renderTranscriptSegmentContent(segment, mode, translated, error) {
   return `<span class="transcript-copy"><span class="transcript-translation ${translated ? "" : error ? "translation-error" : "translation-pending"}">${translationHtml}</span></span>`;
 }
 
-let transcriptReadingLayout = 'paragraph';
+let transcriptReadingLayout = 'sentence';
 let transcriptLayoutSegments = [];
 let transcriptPlanSource = null;
 let transcriptReadingPlan = null;
@@ -2836,6 +2836,7 @@ function layoutTranscriptRows(segments, rows) {
   const list = document.getElementById('transcriptList');
   const grouped = transcriptReadingLayout === 'paragraph' && typeof STUDY !== 'undefined';
   list.classList.toggle('paragraph-mode', grouped);
+  list.classList.toggle('follow-mode', !grouped);
   list.classList.toggle('bilingual-reading', currentTranscriptMode === 'bilingual');
   const fragment = document.createDocumentFragment();
   if (grouped) {
@@ -2854,19 +2855,35 @@ function layoutTranscriptRows(segments, rows) {
         if (i) {
           const separator = STUDY.readingSeparator(group[i - 1].text, segment.text);
           if (separator) copy.append(document.createTextNode(separator));
-          if (currentTranscriptMode === 'original' && plan.pauseBefore.has(index)) {
-            // CSS-generated punctuation is absent from source text, search,
-            // selection, excerpts and clipboard/export output.
-            const pause = document.createElement('span');
-            pause.className = 'reading-pause'; pause.setAttribute('aria-hidden', 'true');
-            copy.append(pause);
+          if (currentTranscriptMode === 'original' && plan.spaceBefore?.has(index)) {
+            // Empty inline spacing keeps natural wrapping and contributes no
+            // characters to selection, search, excerpts, copy or export.
+            const space = document.createElement('span');
+            space.className = 'reading-gap'; space.setAttribute('aria-hidden', 'true');
+            copy.append(space);
           }
         }
         copy.append(rows[index++]);
       });
       paragraph.append(stamp, copy); fragment.append(paragraph);
     }
-  } else rows.forEach(row => fragment.append(row));
+  } else {
+    // Keep the platform's timed fragments intact. Sparse time markers remove
+    // repeated labels without changing seek targets or playback tracking.
+    let lastStamp = -Infinity;
+    rows.forEach((row, index) => {
+      const start = segments[index].start;
+      if (index === 0 || start - lastStamp >= 15) {
+        const stamp = document.createElement('button');
+        stamp.type = 'button'; stamp.className = 'reading-time-marker';
+        stamp.textContent = typeof STUDY !== 'undefined' ? STUDY.time(start) : row.querySelector('.transcript-time')?.textContent || '';
+        stamp.setAttribute('aria-label', `跳转到 ${stamp.textContent}`);
+        stamp.addEventListener('click', event => seekFromTranscriptEntryClick(event, start));
+        fragment.append(stamp); lastStamp = start;
+      }
+      fragment.append(row);
+    });
+  }
   list.replaceChildren(fragment);
   document.querySelectorAll('[data-reading-layout]').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.readingLayout === transcriptReadingLayout));

@@ -23,6 +23,14 @@ test('background returns verified P2 captions, isolates credentials and hides si
   for(const c of h.calls){assert.equal(c.options.credentials,c.url.hostname==='api.bilibili.com'?'include':'omit');assert.equal(c.options.redirect,'error');assert.ok(c.options.signal);}
 });
 
+test('explicit subtitle refresh bypasses HTTP caches without changing credential isolation',async()=>{
+  wbi.clearKeyCache();const h=fixture();
+  const result=await adapter.read(id,true,null,{...h,forceRefresh:true});
+  assert.equal(result.success,true);
+  assert.ok(h.calls.some(c=>c.url.hostname==='aisubtitle.hdslb.com'));
+  for(const c of h.calls){assert.equal(c.options.cache,'no-store');assert.equal(c.options.credentials,c.url.hostname==='api.bilibili.com'?'include':'omit');}
+});
+
 test('a wrong video, wrong CID or missing P2 never yields substituted captions',async()=>{
   for(const options of [{view:{bvid:'BV1cJxy6bEDF'}},{view:{pages:[{page:1,cid:456}]}},{player:{cid:789}}]){
     const result=await adapter.read(id,true,null,fixture(options));assert.equal(result.error,'BILI_IDENTITY_MISMATCH');assert.equal(result.transcript,undefined);

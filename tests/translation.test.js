@@ -299,11 +299,11 @@ test("transcript reading position survives a side panel close", async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(restored)), {
     videoId: "video-a",
     scrollTop: 427.5,
-    layout: 'paragraph',
+    layout: 'sentence',
   });
-  await saveTranscriptViewState('video-a', 612, 'sentence');
+  await saveTranscriptViewState('video-a', 612, 'paragraph');
   assert.deepEqual(JSON.parse(JSON.stringify(await loadTranscriptViewState('video-a'))), {
-    videoId: 'video-a', scrollTop: 612, layout: 'sentence',
+    videoId: 'video-a', scrollTop: 612, layout: 'paragraph',
   });
 });
 

@@ -11,9 +11,9 @@ var STUDY = (() => {
       .map((r, i) => ({ id: `s${i}`, text: r.text.trim(), start: r.start, end: r.start + Math.max(0, Number(r.duration) || 0) }));
   }
   // A single linear pass produces a display plan, never a rewritten transcript.
-  // pauseBefore contains source indices for optional, visual-only commas.
+  // spaceBefore marks visual micro-gaps, never literal spaces or punctuation.
   function readingPlan(segments) {
-    const groups = [], pauseBefore = new Set();
+    const groups = [], spaceBefore = new Set();
     let group = [], size = 0, clauseSize = 0, previousText = '', previousHan = 0;
     const flush = () => { if (group.length) groups.push(group); group = []; size = 0; clauseSize = 0; };
     const han = /\p{Script=Han}/u;
@@ -36,14 +36,16 @@ var STUDY = (() => {
       const end = Number.isFinite(segment.end) ? segment.end : segment.start;
       if (group.length && (segment.ids?.length || size + units > 90 ||
           end - group[0].start > 24 || gap >= 1.5 || (size >= 60 && gap >= 0.45))) flush();
-      if (group.length && gap >= 0.45 && gap < 1.5 && clauseSize >= 10 &&
-          previousHan >= 4 && hanCount >= 3 &&
+      // Small cue groups flow across the available width. Only separate at an
+      // existing Chinese cue boundary, after enough text has accumulated.
+      if (group.length && clauseSize >= 10 && previousHan >= 3 && hanCount >= 3 &&
+          (gap >= 0.45 || clauseSize >= 20 || (clauseSize >= 12 && clauseSize + units > 24)) &&
           /\p{Script=Han}$/u.test(previousText) && /^\p{Script=Han}/u.test(text) &&
           // Conservative exclusions for short fragments, numbers and joiners.
-          !/[的地得和与及或把被对向从在为是不没将让给零〇一二三四五六七八九十百千万亿兆两]$/u.test(previousText) &&
+          !/[的地得和与及或把被对向从在为是不没将让给之零〇一二三四五六七八九十百千万亿兆两]$/u.test(previousText) &&
           !/[零〇一二三四五六七八九十百千万亿兆两]点$/u.test(previousText) &&
           !/^[的地得着了过吗呢吧啊零〇一二三四五六七八九十百千万亿兆两]/u.test(text)) {
-        pauseBefore.add(index); clauseSize = 0;
+        spaceBefore.add(index); clauseSize = 0;
       }
       group.push(segment); size += units;
       clauseSize = hasPunctuation ? tailUnits : clauseSize + units;
@@ -52,7 +54,7 @@ var STUDY = (() => {
       previousText = text; previousHan = hanCount;
     }
     flush();
-    return { groups, pauseBefore };
+    return { groups, spaceBefore };
   }
   function readingParagraphs(segments) { return readingPlan(segments).groups; }
   function readingSeparator(previous, next) {

@@ -3,11 +3,13 @@
 // cleanup controls or paid cleanup path in this reading-focused release.
 const STUDY_CLEANUP_ENABLED = false;
 const studyState = { key: '', epoch: 0, cleaned: [], useCleaned: false, busy: false, stop: false, fullTranslation: false, parts: {}, failures: [], status: '', kind: '' };
+let subtitleReloadRequest = null;
 const studyEl = id => document.getElementById(id);
 const studyKey = () => `${currentVideoId}:${currentTranscriptSource?.trackId || currentTranscriptLanguage || ''}`;
 const upstreamFrontTabUrl = handleFrontTabUrl;
 handleFrontTabUrl = function (url) {
   if (extractVideoId(url) !== currentVideoId) {
+    subtitleReloadRequest = null;
     studyState.epoch++; studyState.stop = true; studyState.busy = false;
     translationGeneration++; transcriptScrollObserver?.disconnect(); transcriptScrollObserver = null;
   }
@@ -59,9 +61,10 @@ translateNotesContent = async function () {};
 function studyMount() {
   if (!studyEl('studyToolbar')) return;
   const isChinese = /^(zh|ai-zh)/i.test(currentTranscriptLanguage || '');
+  const reloading = Boolean(subtitleReloadRequest);
   document.querySelectorAll('[data-transcript-mode]').forEach(b => {
-    b.disabled = isChinese && b.dataset.transcriptMode !== 'original';
-    b.title = isChinese && b.disabled ? '当前字幕已是中文，无需重复翻译' : b.dataset.transcriptMode === 'original' ? '阅读原文，不调用 AI' : '按需翻译可见字幕，将调用你配置的 AI 服务';
+    b.disabled = reloading || (isChinese && b.dataset.transcriptMode !== 'original');
+    b.title = reloading ? '正在刷新字幕' : isChinese && b.disabled ? '当前字幕已是中文，无需重复翻译' : b.dataset.transcriptMode === 'original' ? '阅读原文，不调用 AI' : '按需翻译可见字幕，将调用你配置的 AI 服务';
   });
   studyEl('rawModeBtn').classList.toggle('active', !studyState.useCleaned);
   studyEl('cleanModeBtn').classList.toggle('active', studyState.useCleaned);
@@ -69,7 +72,9 @@ function studyMount() {
     studyEl(id).hidden = !STUDY_CLEANUP_ENABLED;
     studyEl(id).disabled = !STUDY_CLEANUP_ENABLED || studyState.busy || (id === 'cleanModeBtn' && !studyState.cleaned.length);
   }
-  ['generateOverviewBtn','regenerateOverviewBtn','translateAllBtn'].forEach(id => studyEl(id).disabled = studyState.busy);
+  ['generateOverviewBtn','regenerateOverviewBtn','translateAllBtn'].forEach(id => studyEl(id).disabled = studyState.busy || reloading);
+  studyEl('refreshTranscriptBtn').disabled = studyState.busy || reloading;
+  studyEl('refreshTranscriptBtn').textContent = reloading ? '刷新中…' : '刷新字幕';
   studyEl('stopStudyBtn').disabled = !studyState.busy;
   studyEl('stopStudyBtn').hidden = !studyState.busy;
   studyEl('translateAllBtn').hidden = isChinese;
@@ -83,7 +88,7 @@ function studyMount() {
     option.selected = t.id === currentTranscriptSource?.trackId; select.append(option);
   }
   select.hidden = tracks.length < 2;
-  select.disabled = studyState.busy;
+  select.disabled = studyState.busy || reloading;
   const language = isChinese ? '中文' : /^en/i.test(currentTranscriptLanguage || '') ? '英文' : tracks.find(t => t.id === currentTranscriptSource?.trackId)?.name || currentTranscriptLanguage || '原语言';
   const platform = currentTranscriptSource ? 'B 站' : 'YouTube';
   const isPlatformAi = tracks.find(t => t.id === currentTranscriptSource?.trackId)?.ai || /^ai-/i.test(currentTranscriptLanguage || '');
@@ -92,7 +97,7 @@ function studyMount() {
 
 async function runStudyTask(kind, force = false) {
   if (kind === 'cleanup' && !STUDY_CLEANUP_ENABLED) return;
-  if (studyState.busy || !currentTranscript?.length) return;
+  if (studyState.busy || subtitleReloadRequest || !currentTranscript?.length) return;
   if (force && !confirm('重新生成会再次调用模型。确认重新生成？')) return;
   studyReset();
   const epoch = studyState.epoch, videoId = currentVideoId, title = currentVideoTitle;
@@ -173,7 +178,7 @@ renderAnalysisResults = function (analysis) {
 };
 
 async function studyFullTranslation() {
-  if (studyState.busy || !currentTranscript?.length) return;
+  if (studyState.busy || subtitleReloadRequest || !currentTranscript?.length) return;
   studyReset();
   const epoch = studyState.epoch;
   studyState.busy = true; studyState.stop = false; studyState.fullTranslation = true;
@@ -213,21 +218,50 @@ function studyExport(copy = false) {
 exportTranscript = () => studyExport(false);
 copyTranscript = () => studyExport(true);
 
-async function studyChangeTrack() {
-  if (studyState.busy) return;
-  const videoId = currentVideoId, generation = ++digestGeneration, trackId = studyEl('subtitleTrack').value;
-  studyStatus('正在切换字幕轨…');
+async function reloadStudyTranscript(trackId, forceRefresh = false) {
+  if (studyState.busy || subtitleReloadRequest || !currentVideoId) return;
+  const videoId = currentVideoId, tabId = youtubeTabId, generation = ++digestGeneration;
+  const request = subtitleReloadRequest = { videoId, tabId, generation };
+  const isCurrent = () => subtitleReloadRequest === request && videoId === currentVideoId &&
+    tabId === youtubeTabId && generation === digestGeneration;
+  translationGeneration++; transcriptScrollObserver?.disconnect(); transcriptScrollObserver = null;
+  studyStatus(forceRefresh ? '正在重新获取字幕，当前内容仍可阅读…' : '正在切换字幕轨…');
+  studyMount();
+  let timeout;
   try {
-    const result = await chrome.runtime.sendMessage({ action: 'fetchTranscript', videoId, tabId: youtubeTabId, trackId });
-    if (videoId !== currentVideoId || generation !== digestGeneration) return;
-    if (!result.success) throw new Error(result.message || result.error);
+    // Go directly to the provider; never satisfy an explicit refresh from the
+    // local digest/overview cache. Keep the old result until a valid one arrives.
+    const result = await Promise.race([
+      chrome.runtime.sendMessage({ action: 'fetchTranscript', videoId, tabId, trackId, forceRefresh }),
+      new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('字幕请求超时，请稍后重试。')), 30000); }),
+    ]);
+    if (!isCurrent()) return;
+    if (!result?.success) throw new Error(result?.message || result?.error || '未收到字幕结果，请重试。');
     if (!DIGEST_VIDEO.validTranscriptSource(videoId, result.source)) throw new Error('字幕来源与当前视频不一致，请重试。');
-    translationGeneration++; transcriptScrollObserver?.disconnect(); transcriptScrollObserver = null;
+    if (!Array.isArray(result.transcript) || !result.transcript.length ||
+        result.transcript.some(row => !row || typeof row.text !== 'string' || !row.text.trim() || !Number.isFinite(row.start) || row.start < 0)) {
+      throw new Error('平台未返回有效字幕，请稍后重试。');
+    }
+    const changed = currentTranscriptSource?.trackId !== result.source?.trackId ||
+      currentTranscriptLanguage !== result.language || currentTranscript?.length !== result.transcript.length ||
+      result.transcript.some((row, i) => row.text !== currentTranscript[i]?.text || row.start !== currentTranscript[i]?.start || row.duration !== currentTranscript[i]?.duration);
+    const area = studyEl('contentArea'), scrollTop = area.scrollTop;
     currentTranscript = result.transcript; currentTranscriptText = result.transcriptText; currentTranscriptTimestamped = result.transcriptTextTimestamped;
-    currentTranscriptSource = result.source; currentTranscriptLanguage = result.language; currentTranscriptTracks = result.tracks;
-    currentAnalysis = null; currentTranscriptMode = 'original'; setTranscriptModeButtons('original'); renderTranscript(); await saveToCache(videoId);
-  } catch (e) { studyStatus(e.message); }
+    currentTranscriptSource = result.source || null; currentTranscriptLanguage = result.language || null; currentTranscriptTracks = result.tracks || [];
+    if (changed) { currentAnalysis = null; studyState.key = ''; }
+    currentTranscriptMode = 'original'; setTranscriptModeButtons('original'); renderTranscript();
+    if (forceRefresh) { lastAutoScrollTime = Date.now(); area.scrollTop = scrollTop; }
+    studyStatus(`${forceRefresh ? '字幕已刷新' : '已切换字幕轨'} · ${currentTranscript.length} 条${changed ? ' · 概览可按需重新生成' : ''}`);
+    await saveToCache(videoId);
+  } catch (e) {
+    if (isCurrent()) studyStatus(`${forceRefresh ? '刷新失败' : '切换失败'}，已保留当前字幕。${e.message}`);
+  } finally {
+    clearTimeout(timeout);
+    if (subtitleReloadRequest === request) { subtitleReloadRequest = null; studyMount(); }
+  }
 }
+const studyChangeTrack = () => reloadStudyTranscript(studyEl('subtitleTrack').value);
+const refreshStudyTranscript = () => reloadStudyTranscript(currentTranscriptSource?.trackId || null, true);
 
 document.addEventListener('DOMContentLoaded', () => {
   if (STUDY_CLEANUP_ENABLED) studyEl('cleanTranscriptBtn').addEventListener('click', () => runStudyTask('cleanup'));
@@ -238,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
   studyEl('rawModeBtn').addEventListener('click', () => { if (studyState.busy) return; studyState.useCleaned = false; currentTranscriptMode = 'original'; translationGeneration++; transcriptScrollObserver?.disconnect(); transcriptScrollObserver = null; setTranscriptModeButtons('original'); renderTranscript(); });
   studyEl('cleanModeBtn').addEventListener('click', () => { if (studyState.busy) return; studyState.useCleaned = true; currentTranscriptMode = 'original'; translationGeneration++; transcriptScrollObserver?.disconnect(); transcriptScrollObserver = null; setTranscriptModeButtons('original'); renderTranscript(); });
   studyEl('subtitleTrack').addEventListener('change', studyChangeTrack);
+  studyEl('refreshTranscriptBtn').addEventListener('click', refreshStudyTranscript);
   studyEl('exportNotesBtn').addEventListener('click', () => {
     const text = currentNotes.map(n => `## ${n.videoTitle}\n\n[${n.timestamp}](${n.timestampedUrl})\n\n${n.text}`).join('\n\n');
     downloadTextFile(text || '暂无摘录', '视频摘录.md');
