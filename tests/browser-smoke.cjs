@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
+const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')).version;
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{})});
  try {
@@ -41,7 +42,7 @@ const root=path.resolve(__dirname,'..');
      return {success:true};
    };
    window.chrome={storage:{local,session:local},runtime:{sendMessage,onMessage:event,getURL:s=>'http://digest.test/'+s,getManifest:()=>({version})},windows:{getCurrent:async()=>({id:1})},tabs:{query:async()=>[{id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/',active:true,windowId:1}],get:async()=>({id:1,url:'https://www.bilibili.com/video/BV1a6Yx62EH4/'}),onUpdated:event,onActivated:event,sendMessage:async(_id,m)=>{if(api.connectionError)throw Error('Receiving end does not exist.');return m.action==='getCurrentTime'?{success:true,currentTime:api.time,paused:true}:{success:true};},create:async()=>({})},permissions:{request:async()=>{api.permissionGranted=true;return true;},contains:async()=>!api.connectionError||!!api.permissionGranted}};
- }, {version:JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')).version});
+ }, {version});
  const page=await context.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://digest.test/sidepanel.html');
  await page.locator('#transcriptList .transcript-entry').first().waitFor();
@@ -90,7 +91,7 @@ const root=path.resolve(__dirname,'..');
  assert.ok(await page.locator('#chapterList details p').last().isVisible());
  await page.screenshot({path:path.join(root,'dist','overview-preview.png')});
  await page.locator('#contentArea').evaluate(el=>el.scrollTop=0);
- await page.screenshot({animations:'disabled',path:path.join(root,'dist','overview-ui-v017.png')});
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist',`overview-ui-v${version}.png`)});
  await page.click('#quotesList button:last-child');await page.waitForFunction(()=>__api.notes.length>0);
  // Track switching clears stale overview and preserves the raw-first rule.
  await page.selectOption('#subtitleTrack','en');await page.waitForFunction(()=>currentTranscriptLanguage==='en');
@@ -100,7 +101,7 @@ const root=path.resolve(__dirname,'..');
  await page.click('[data-transcript-mode=bilingual]');await page.waitForFunction(()=>transcriptParagraphCache.size>0);
  await page.click('[data-tab=notes]');await page.locator('#notesList .note-text').first().waitFor();
  assert.doesNotMatch(await page.locator('#notesList').innerText(),/Translating|Waiting for translation/);
- await page.screenshot({animations:'disabled',path:path.join(root,'dist','notes-ui-v017.png')});
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist',`notes-ui-v${version}.png`)});
  await page.click('[data-tab=transcript]');
  let confirmation=false;page.once('dialog',async d=>{confirmation=true;await d.dismiss();});await page.click('#exportTranscriptBtn');assert.equal(confirmation,true);
  await page.click('[data-transcript-mode=original]');
@@ -188,10 +189,10 @@ const root=path.resolve(__dirname,'..');
  await reader.waitForFunction(()=>document.querySelector('.active-playback')?.dataset.segmentId==='s5');
  assert.equal(await reader.locator('.active-playback').count(),1);
  assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- await reader.screenshot({animations:'disabled',path:path.join(root,'dist','reader-ui-v017-360.png')});
+ await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`reader-ui-v${version}-360.png`)});
  await reader.setViewportSize({width:440,height:880});
  assert.equal(await reader.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- await reader.screenshot({animations:'disabled',path:path.join(root,'dist','reader-ui-v017-440.png')});
+ await reader.screenshot({animations:'disabled',path:path.join(root,'dist',`reader-ui-v${version}-440.png`)});
  assert.deepEqual(errors,[]);
  console.log('PASS: paragraph grouping / exact source text / sentence highlight and seek / selection / cross-cue search / anchored layout switch / zero AI / narrow layout');
  // Floating entry is also tested in a browser DOM after SPA changes and removal.

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.8 — 2026-11-02
+
+- 侧栏蓝色减少灰感，调整为更清亮的天蓝；同步微调选中指示线、按钮、浅色表面和字幕高亮。
+- 小字号与白字按钮使用较深的同色系蓝色，保留清晰对比。布局与功能沿用 0.1.7。
+
+Brighter sky-blue accents and softer blue highlights, preserving the existing layout and behavior.
+
 ## v0.1.7 — 2026-11-02
 
 - 侧栏改为雾蓝与白底，保留原有布局；统一中文字体、细线标签和轻量按钮，减少阴影与装饰。

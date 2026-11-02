@@ -1,4 +1,4 @@
-/* BiliMemo — a quiet reading surface, with slate-blue navigation.
+/* BiliMemo — a quiet reading surface, with soft sky-blue navigation.
  * Local Chinese sans-serif fonts; no remote assets or font requests.
  */
 
@@ -9,7 +9,7 @@
   /* Neutral paper and blue-grey ink */
   --bg: #ffffff;
   --surface: #ffffff;
-  --surface-raised: #f3f6f9;
+  --surface-raised: #f3f8fc;
   --border: #e5eaf0;
   --border-heavy: #cbd5e1;
   --text: #263344;
@@ -17,9 +17,10 @@
   --text-muted: #65758a;
 
   /* Accents */
-  --accent: #466b93;
-  --accent-hover: #355678;
-  --accent-dim: #edf3f9;
+  --accent: #1876ae;
+  --accent-hover: #126497;
+  --accent-bright: #2d96d2;
+  --accent-dim: #edf8ff;
   --sage: #52796a; /* quiet secondary */
   --sage-dim: #edf5f1;
   --success: #52796a;
@@ -914,7 +915,7 @@ body {
 .paragraph-mode .transcript-entry { display: inline; padding: 2px 0; margin: 0; border: 0; border-radius: 3px; box-shadow: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .paragraph-mode .transcript-entry .transcript-time { display: none; }
 .paragraph-mode .transcript-text { font-size: inherit; line-height: inherit; color: var(--text); }
-.paragraph-mode .transcript-entry.active-playback { background: #deebf7; color: var(--text); box-shadow: inset 0 -1px #7fa2c6; }
+.paragraph-mode .transcript-entry.active-playback { background: #dcf1ff; color: var(--text); box-shadow: inset 0 -1px #72bae6; }
 .paragraph-mode .transcript-entry.search-current { box-shadow: none; }
 .paragraph-mode .transcript-copy, .paragraph-mode:not(.bilingual-reading) .transcript-translation { display: inline; }
 .paragraph-mode.bilingual-reading .transcript-entry { display: block; padding: 4px 0; }
@@ -1535,7 +1536,7 @@ body {
 }
 
 /* Bilibili reader: bounded controls, the content pane owns scrolling. */
-.study-toolbar { flex: 0 0 auto; padding: 10px 22px; background: #fafbfd; border-bottom: 1px solid var(--border); max-height: 32vh; overflow-y: auto; }
+.study-toolbar { flex: 0 0 auto; padding: 10px 22px; background: #f9fcff; border-bottom: 1px solid var(--border); max-height: 32vh; overflow-y: auto; }
 .study-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .study-toolbar select { max-width: 100%; padding: 5px 26px 5px 8px; border: 1px solid var(--border-heavy); border-radius: var(--r-sm); background: white;
   font: 400 12px/1.5 var(--font-body);
@@ -1590,7 +1591,7 @@ button:disabled { cursor: default; }
   width: 26px;
   height: 3px;
   border-radius: 3px 3px 0 0;
-  background: var(--accent);
+  background: var(--accent-bright);
 }
 .export-preference input { accent-color: var(--accent); width: 13px; height: 13px; }
 #subtitleSource { font-size: 11px; color: var(--text-secondary); }

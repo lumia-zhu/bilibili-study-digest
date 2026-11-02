@@ -8,9 +8,9 @@
 
 **默认显示原始字幕，按段落阅读；需要时再翻译或生成概览。** 阅读、搜索和播放高亮无需 AI 密钥，也不会触发模型调用。
 
-[下载安装包](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.7) · [安装步骤](#安装与开始使用) · [常见问题](#常见问题) · [版本记录](CHANGELOG.md)
+[下载安装包](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.8) · [安装步骤](#安装与开始使用) · [常见问题](#常见问题) · [版本记录](CHANGELOG.md)
 
-当前版本为 **v0.1.7 开发预览**，支持 Edge / Chrome，尚未上架扩展商店。采用 MIT 协议，独立维护；[来源与授权说明](#来源与-mit-授权)见文末。
+当前版本为 **v0.1.8 开发预览**，支持 Edge / Chrome，尚未上架扩展商店。采用 MIT 协议，独立维护；[来源与授权说明](#来源与-mit-授权)见文末。
 
 ## 能做什么
 
@@ -29,7 +29,7 @@
 
 ### 1. 下载并加载扩展
 
-1. 打开[版本发布页](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.7)，下载附件 **`bilimemo-v0.1.7.zip`**。
+1. 打开[版本发布页](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.8)，下载附件 **`bilimemo-v0.1.8.zip`**。
 2. 解压到一个长期保留的文件夹，确认里面有 `manifest.json`。不要直接选择 ZIP 文件。
 3. 在地址栏打开 Edge 的 `edge://extensions`，或 Chrome 的 `chrome://extensions`。
 4. 开启「开发者模式」，点击「加载已解压的扩展程序」，选择刚才的文件夹。
