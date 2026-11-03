@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.16 — 2026-11-03（开发预览）
+
+- 将视频操作栏入口从英文 `digest` 改为中文「字幕」，更直接地说明用途。
+- 参照 B 站发送按钮，调整为 36px 高、10px 圆角、至少 64px 宽的圆角矩形，使用中文字体与更舒展的留白。
+- 同步更新中英文安装说明、B 站支持说明、开发验收清单和验证记录，修正文档中旧的浮动入口与辅助逗号描述；保留 MIT 许可证和完整来源说明。
+
+Renames the video action-bar entry to 字幕 (Captions) and refines its rounded rectangle, Chinese typography and padding to fit Bilibili's native controls. Updates the bilingual installation guide, Bilibili support notes and validation checklist to match the current toolbar entry and reading layouts. MIT attribution is preserved. Development preview.
+
 ## v0.1.15 — 2026-11-03（开发预览）
 
 - 将 B 站页面入口移到「点赞、投币、收藏、转发」旁，文案简化为 `digest`；使用参考发送按钮的天蓝色、小圆角与无阴影样式。

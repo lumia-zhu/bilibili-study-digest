@@ -1,8 +1,8 @@
 # Note Cleanup Prompt
 
-Used in `background.js` when the user saves a note (via the floating Note button,
-the `n` shortcut, or the "Save quote as note" button).
-Cleans up the transcript excerpt around the saved timestamp.
+Retained for the legacy `cleanupNoteText` helper in `background.js`.
+The current excerpt-saving flow stores source text directly and does not call
+this helper or send a cleanup request. The prompt is preserved for compatibility.
 
 ## System prompt
 

@@ -420,21 +420,21 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  await floating.addScriptTag({path:path.join(root,'platforms.js')});await floating.addScriptTag({path:path.join(root,'bilibili-content.js')});
  assert.equal(await floating.locator('#bili-digest-controls').count(),0);
  await floating.locator('.video-toolbar-container').evaluate(el=>{el.innerHTML='<div class="video-toolbar-left"><span>点赞</span><span>投币</span><span>收藏</span><span>转发</span></div><div class="video-toolbar-right">笔记 · 更多</div>';});
- await floating.getByRole('button',{name:'digest',exact:true}).click();
+ await floating.getByRole('button',{name:'字幕',exact:true}).click();
  assert.ok(await floating.evaluate(()=>__api.calls.some(m=>m.action==='openSidePanel')));
  assert.ok(await floating.evaluate(()=>{
    const host=document.getElementById('bili-digest-controls'), left=document.querySelector('.video-toolbar-left'), right=document.querySelector('.video-toolbar-right');
    return left.nextElementSibling===host && host.parentElement===left.parentElement && getComputedStyle(host).position==='relative' && Math.abs(host.getBoundingClientRect().left-left.getBoundingClientRect().right-12)<1 && host.getBoundingClientRect().right<=right.getBoundingClientRect().left && right.getBoundingClientRect().right<=right.parentElement.getBoundingClientRect().right+1;
  }));
  await floating.mouse.move(0,0);
- assert.equal(await floating.getByRole('button',{name:'digest',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 135, 189)');
- await floating.getByRole('button',{name:'digest',exact:true}).focus();
+ assert.equal(await floating.getByRole('button',{name:'字幕',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 135, 189)');
+ await floating.getByRole('button',{name:'字幕',exact:true}).focus();
  await floating.keyboard.press('Tab');
  assert.equal(await floating.getByRole('button',{name:'保存摘录',exact:true}).evaluate(el=>el.matches(':focus-visible')),true);
  await floating.evaluate(()=>{history.pushState({},'', '?p=2');document.getElementById('bili-digest-controls').remove();});
- await floating.getByRole('button',{name:'digest',exact:true}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
+ await floating.getByRole('button',{name:'字幕',exact:true}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
  await floating.locator('.video-toolbar-container').evaluate(el=>{const next=el.cloneNode(true);next.querySelector('#bili-digest-controls').remove();el.replaceWith(next);});
- await floating.getByRole('button',{name:'digest',exact:true}).waitFor();
+ await floating.getByRole('button',{name:'字幕',exact:true}).waitFor();
  assert.equal(await floating.locator('.video-toolbar-left + #bili-digest-controls').count(),1);
  assert.equal(await floating.locator('#bili-digest-controls').count(),1);
  console.log('PASS: toolbar entry / delayed mounting / narrow action bar / keyboard focus / click relay / SPA replacement / single instance');

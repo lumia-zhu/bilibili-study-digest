@@ -91,8 +91,9 @@
     style.textContent = `:host{display:inline-flex;position:relative;align-self:center;flex:0 0 auto;
       margin:0 auto 0 12px!important;vertical-align:middle;font:14px system-ui,-apple-system,"Microsoft YaHei",sans-serif}
       .controls{display:flex;align-items:center;gap:4px}
-      button{box-sizing:border-box;height:32px;padding:0 12px;border:0;border-radius:6px;
-        background:#0087bd;color:#fff;cursor:pointer;white-space:nowrap;font:500 14px/1 system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+      button{box-sizing:border-box;height:36px;padding:0 16px;border:0;border-radius:10px;
+        background:#0087bd;color:#fff;cursor:pointer;white-space:nowrap;font:500 14px/20px "PingFang SC","Microsoft YaHei",sans-serif}
+      .open-caption{min-width:64px;letter-spacing:1px}
       button:hover{background:#0076a7}button:active{background:#006b98}
       button:focus-visible{outline:2px solid #0087bd;outline-offset:3px}
       .save-note{display:grid;place-items:center;width:32px;padding:0;background:transparent;color:var(--text2,#61666d)}
@@ -103,7 +104,7 @@
         border:1px solid #e3e8ed;border-radius:6px;pointer-events:none}
       [role=status]:empty{display:none}[role=status]:not(:empty){padding:8px 12px;box-shadow:0 2px 8px #0001}`;
     const controls = document.createElement("div"); controls.className = "controls";
-    const open = document.createElement("button"); open.textContent = "digest"; open.type = "button";
+    const open = document.createElement("button"); open.textContent = "字幕"; open.type = "button"; open.className = "open-caption";
     open.title = "打开字幕、概览与摘录";
     open.addEventListener("click", () => {
       chrome.runtime.sendMessage({ action: "openSidePanel" }).then(result => {

@@ -1,6 +1,6 @@
 {
   "name": "bilimemo",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Bilibili-first caption reader with playback sync, optional translation and chapter overviews.",
   "license": "MIT",

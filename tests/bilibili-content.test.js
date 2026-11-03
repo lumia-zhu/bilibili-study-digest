@@ -47,7 +47,7 @@ function harness({ hasToolbar = true } = {}) {
 test("Bilibili controls open the panel and save current-part timestamp notes", async () => {
   const h = harness();
   const controls = h.actions.nextElementSibling.shadow.children[1];
-  assert.equal(controls.children[0].textContent, "digest");
+  assert.equal(controls.children[0].textContent, "字幕");
   await controls.children[0].listeners.click();
   assert.equal(h.sent.at(-1).action, "openSidePanel");
   await controls.children[1].listeners.click();

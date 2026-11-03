@@ -10,7 +10,7 @@ A browser extension for reading captions, finding passages and reviewing key poi
 
 [Download](https://github.com/lumia-zhu/bilibili-study-digest/releases) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **v0.1.15 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
+Current version: **[v0.1.16 development preview](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.16)** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
@@ -38,7 +38,7 @@ Paragraph mode (段落) uses shorter paragraphs, usually around 60–90 Chinese 
 
 ### 2. Open a Bilibili video
 
-Refresh existing video tabs. Open the side panel using the sky-blue **digest** button next to Bilibili's Like / Coin / Favorite / Share actions, or the extension's browser toolbar icon. The small bookmark button beside digest saves the current passage as an excerpt.
+Refresh existing video tabs. Open the side panel using the sky-blue **字幕** (Captions) button next to Bilibili's Like / Coin / Favorite / Share actions, or the extension's browser toolbar icon. The small bookmark button beside Captions saves the current passage as an excerpt.
 
 Try original captions, keyword search, click-to-seek and saving an excerpt first. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
 
@@ -62,13 +62,13 @@ After updating, reload the extension and refresh video tabs. Keep the installati
 
 ## FAQ
 
-### Why do captions load without playback highlighting or the digest button?
+### Why do captions load without playback highlighting or the Captions button?
 
 Caption fetching and the video-page connection use separate paths. Successful caption loading does not prove that playback synchronization is connected.
 
 For `PAGE_ACCESS_BLOCKED / Blocked` in Edge, keep the Bilibili tab open and check the site-level **Allow extensions on bilibili.com** switch at the top of the browser's extensions menu. Enable it, refresh the video page, then use the panel's reconnect button. This switch is separate from the extension's own site permissions.
 
-If it still fails, inspect the version and error code in the panel's synchronization diagnostics. Other browser policies can also block access; the code alone does not identify the cause. The digest entry follows the video action bar. In fullscreen or before the action bar loads, use the extension's browser toolbar icon to open the panel.
+If it still fails, inspect the version and error code in the panel's synchronization diagnostics. Other browser policies can also block access; the code alone does not identify the cause. The Captions entry follows the video action bar. In fullscreen or before the action bar loads, use the extension's browser toolbar icon to open the panel.
 
 ### Why are captions unavailable for some videos?
 
@@ -84,7 +84,7 @@ This preview focuses on Bilibili. The YouTube / Supadata settings are fully hidd
 
 ## Current scope
 
-- Standard Bilibili BV video pages and multipart videos are supported. Live streams and series pages are outside the current scope.
+- Standard Bilibili BV / AV video pages and multipart videos are supported. Live streams and series pages are outside the current scope.
 - Original captions, translations and different tracks are handled separately. Incomplete translation exports are explicitly identified.
 - Original excerpts can be saved and exported; a personal interpretation editor is not included.
 - Local spacing rules do not guarantee semantic grouping and never rewrite captions. The fallback player clock has whole-second precision.
