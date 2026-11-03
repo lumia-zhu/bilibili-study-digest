@@ -1,136 +1,69 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BiliMemo Settings</title>
+    <title>BiliMemo 设置</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main class="settings-shell">
       <header>
         <div class="settings-heading-row">
-          <div class="eyebrow">BiliMemo · YouTube + B站</div>
-          <div
-            class="language-switch"
-            role="group"
-            aria-label="Interface language"
-            data-i18n-aria-label="languageGroupLabel"
-          >
-            <button
-              class="language-option"
-              type="button"
-              data-language="en"
-              aria-pressed="true"
-            >
-              English
-            </button>
-            <button
-              class="language-option"
-              type="button"
-              data-language="zh-CN"
-              aria-pressed="false"
-            >
-              中文
-            </button>
+          <div class="brand"><img src="icons/icon48.png" width="30" height="30" alt="" /><span>BiliMemo</span></div>
+          <div class="language-switch" role="group" aria-label="Interface language" data-i18n-aria-label="languageGroupLabel">
+            <button type="button" data-language="zh-CN" aria-pressed="true">中文</button>
+            <button type="button" data-language="en" aria-pressed="false">English</button>
           </div>
         </div>
-        <h1 data-i18n="heading">Bring your own API keys</h1>
-        <p class="lede" data-i18n="lede">
-          Keys stay in this Chrome profile and are sent only to Supadata and
-          DeepSeek. This open-source extension has no developer server or
-          analytics.
-        </p>
+        <h1 data-i18n="heading">设置</h1>
+        <p class="lede" data-i18n="lede">原文阅读，直接开始。需要翻译或概览时，再配置 AI 服务。</p>
       </header>
 
-      <p class="help">B 站字幕可直接使用，无需 Supadata Key。摘要、翻译及 AI 解释需要 DeepSeek Key。登录状态仅在 B 站页面内使用。</p>
+      <div class="reading-note" role="note">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div><strong data-i18n="biliReady">B 站字幕，无需配置</strong><p data-i18n="biliReadyHelp">阅读、搜索、播放同步和保存摘录，都不需要 API 密钥。</p></div>
+      </div>
+
       <form id="settingsForm">
-        <section class="card">
-          <h2 data-i18n="transcriptProvider">Transcript provider</h2>
-          <label for="supadataApiKey" data-i18n="supadataApiKeyLabel"
-            >Supadata API key</label
-          >
-          <input
-            id="supadataApiKey"
-            name="supadataApiKey"
-            type="password"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="Paste your Supadata key"
-          />
-          <p class="help">
-            <span data-i18n="supadataHelp"
-              >Used to fetch timestamped YouTube subtitles.</span
-            >
-            <a
-              href="https://dash.supadata.ai/auth/sign-up"
-              target="_blank"
-              rel="noreferrer"
-              data-i18n="supadataLink"
-              >Create a Supadata account and key</a
-            ><span data-i18n="supadataHelpSuffix"
-              >. Supadata generates the key during onboarding.</span
-            >
-          </p>
-        </section>
+        <section class="settings-section" aria-labelledby="aiSectionTitle">
+          <div class="section-heading"><h2 id="aiSectionTitle" data-i18n="aiProvider">AI 服务</h2><p data-i18n="aiSectionHelp">按需开启翻译、概览与解释。</p></div>
+          <div class="section-body">
+            <div class="field-heading"><label for="aiApiKey" data-i18n="deepseekApiKeyLabel">API 密钥</label><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer" data-i18n="deepseekLink">获取 DeepSeek 密钥</a></div>
+            <input id="aiApiKey" name="aiApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your DeepSeek key" data-i18n-placeholder="keyPlaceholder" aria-describedby="keyHelp" disabled />
+            <p class="help" id="keyHelp" data-i18n="deepseekHelp">默认使用 DeepSeek，也可以在下方更换服务与模型。</p>
 
-        <section class="card">
-          <h2 data-i18n="aiProvider">AI provider</h2>
-          <div
-            class="provider-summary"
-            aria-label="Supported AI provider"
-            data-i18n-aria-label="providerSummaryLabel"
-          >
-            <span class="provider-name">DeepSeek V4 Flash</span>
-            <span class="provider-badge" data-i18n="providerBadge"
-              >Supported in this version</span
-            >
-          </div>
+            <details class="advanced-settings">
+              <summary data-i18n="advancedSettings">模型与服务地址</summary>
+              <div class="details-content">
+                <label for="aiBaseUrl" data-i18n="baseUrlLabel">服务地址</label>
+                <input id="aiBaseUrl" name="aiBaseUrl" type="url" spellcheck="false" placeholder="https://api.deepseek.com" aria-describedby="baseUrlHelp" disabled />
+                <p class="help" id="baseUrlHelp" data-i18n="baseUrlHelp">填写兼容 Chat Completions 的 API 地址。</p>
+                <label for="aiModel" data-i18n="modelLabel">模型名称</label>
+                <input id="aiModel" name="aiModel" type="text" spellcheck="false" placeholder="deepseek-v4-flash" disabled />
+                <p class="help" data-i18n="providerHelp">更换服务后，请填写对应密钥；保存时可能需要允许访问该服务。</p>
+              </div>
+            </details>
+            <p class="privacy-note" data-i18n="privacyNote">密钥保存在当前浏览器中。只有主动使用 AI 功能时，相关字幕才会发送给所选服务，并可能产生费用。</p>
 
-          <details class="advanced-settings"><summary>高级：模型与服务地址</summary>
-            <label for="aiBaseUrl">API Base URL（兼容 Chat Completions）</label><input id="aiBaseUrl" type="url" placeholder="https://api.deepseek.com" />
-            <label for="aiModel">模型名称</label><input id="aiModel" type="text" placeholder="deepseek-v4-flash" />
-            <p class="help">切换服务时请重新确认密钥。保存时只申请你填写的服务域名权限。</p>
-          </details>
-          <label for="aiApiKey" data-i18n="deepseekApiKeyLabel"
-            >DeepSeek API key</label
-          >
-          <input
-            id="aiApiKey"
-            name="aiApiKey"
-            type="password"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="Paste your DeepSeek key"
-          />
-          <p class="help">
-            <span data-i18n="deepseekHelp"
-              >BiliMemo uses DeepSeek V4 Flash for overviews,
-              explanations, translation, and note polishing.</span
-            >
-            <a
-              href="https://platform.deepseek.com/api_keys"
-              target="_blank"
-              rel="noreferrer"
-              data-i18n="deepseekLink"
-              >Create a DeepSeek API key</a
-            ><span data-i18n="deepseekHelpSuffix">.</span>
-          </p>
-          <div class="privacy-note" data-i18n="privacyNote">
-            When you use AI features, DeepSeek receives the video transcript
-            and relevant video context. Review DeepSeek's terms and pricing
-            before saving.
+            <!-- YouTube settings remain stored and editable in code for future restoration. -->
+            <section id="youtubeSettings" hidden>
+              <h2 data-i18n="transcriptProvider">YouTube 字幕服务</h2>
+              <label for="supadataApiKey" data-i18n="supadataApiKeyLabel">Supadata API 密钥</label>
+              <input id="supadataApiKey" name="supadataApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Supadata key" disabled />
+              <p class="help"><span data-i18n="supadataHelp"></span><a href="https://dash.supadata.ai/auth/sign-up" target="_blank" rel="noreferrer" data-i18n="supadataLink">创建 Supadata 账号并获取密钥</a><span data-i18n="supadataHelpSuffix"></span></p>
+            </section>
+
+            <div class="save-area">
+              <div class="form-actions">
+                <button id="saveSettingsBtn" class="primary" type="submit" data-i18n="saveSettings" disabled>保存设置</button>
+                <button id="testConnectionBtn" type="button" aria-describedby="connectionHint" disabled>测试连接</button>
+              </div>
+              <p class="help" id="connectionHint">先保存设置，再测试连接。测试会发起一次少量 AI 调用。</p>
+              <div class="form-feedback" aria-live="polite"><p id="saveStatus" role="status"></p><p id="connectionStatus" role="status"></p></div>
+            </div>
           </div>
         </section>
-
-        <div class="form-actions"><button id="testConnectionBtn" type="button">测试已保存连接（少量调用）</button>
-          <span id="connectionStatus" role="status"></span></div>
-        <div class="form-actions">
-          <button class="primary" type="submit" data-i18n="saveSettings">
-            Save settings
-          </button>
-          <span id="saveStatus" role="status" aria-live="polite"></span>
-        </div>
       </form>
 
       <details class="card customization-card" hidden>
@@ -198,37 +131,20 @@
         </div>
       </details>
 
-      <section class="card data-card">
-        <h2 data-i18n="localData">Local data</h2>
-        <p class="help" data-i18n="localDataHelp">
-          Digests, translations, and notes are stored only in this Chrome
-          profile. You can remove them at any time.
-        </p>
-        <div class="data-actions">
-          <button id="clearCacheBtn" type="button" data-i18n="clearCache">
-            Clear cached digests
-          </button>
-          <button id="clearNotesBtn" type="button" data-i18n="deleteNotes">
-            Delete all notes
-          </button>
-          <button
-            id="resetBtn"
-            class="danger"
-            type="button"
-            data-i18n="resetData"
-          >
-            Reset extension data
-          </button>
+      <section class="settings-section" aria-labelledby="dataSectionTitle">
+        <div class="section-heading"><h2 id="dataSectionTitle" data-i18n="localData">本地数据</h2><p data-i18n="localDataHelp">缓存与摘录保存在当前浏览器中。</p></div>
+        <div class="section-body">
+          <div class="data-row"><div><h3 data-i18n="cacheTitle">字幕与 AI 缓存</h3><p class="help" data-i18n="cacheHelp">清除后按需重新获取，保留设置和摘录。</p></div><button id="clearCacheBtn" type="button" data-i18n="clearCache">清除缓存</button></div>
+          <details class="data-management">
+            <summary data-i18n="dataManagement">删除摘录与重置</summary>
+            <p class="help" data-i18n="destructiveHelp">这些操作无法撤销，请先导出需要的摘录。</p>
+            <div class="data-actions"><button id="clearNotesBtn" class="danger" type="button" data-i18n="deleteNotes">删除全部摘录</button><button id="resetBtn" class="danger" type="button" data-i18n="resetData">重置扩展数据</button></div>
+          </details>
+          <p id="dataStatus" role="status" aria-live="polite"></p>
         </div>
-        <span id="dataStatus" role="status" aria-live="polite"></span>
       </section>
-
-      <footer data-i18n-html="footer">
-        Read <a href="PRIVACY.md" target="_blank">PRIVACY.md</a> in the
-        repository for the complete data-flow description.
-      </footer>
+      <footer><span>BiliMemo <span id="settingsVersion"></span></span><span data-i18n-html="footer">密钥与数据保留在本地 · <a href="PRIVACY.md" target="_blank">隐私说明</a></span></footer>
     </main>
-
     <script src="settings.js"></script>
     <script src="options.js"></script>
   </body>

@@ -101,11 +101,11 @@ test("language controls expose a labelled group and one pressed button", () => {
   );
   assert.match(
     html,
-    /data-language="en"[\s\S]*aria-pressed="true"[\s\S]*English/,
+    /data-language="en"[\s\S]*aria-pressed="false"[\s\S]*English/,
   );
   assert.match(
     html,
-    /data-language="zh-CN"[\s\S]*aria-pressed="false"[\s\S]*中文/,
+    /data-language="zh-CN"[\s\S]*aria-pressed="true"[\s\S]*中文/,
   );
 
   const buttons = ["en", "zh-CN"].map((language) => ({

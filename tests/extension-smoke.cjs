@@ -13,7 +13,7 @@ const {fixture}=require('./bili-fixture.cjs');
   console.log('Extension worker ready');
   const id=worker.url().split('/')[2], bvid='BV1a6Yx62EH4';
   const headers={'access-control-allow-origin':'https://www.bilibili.com','access-control-allow-credentials':'true'};
-  await context.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><h1 class="video-title">真实扩展加载测试</h1><video id="unrelated-preview"></video><div class="bpx-player-video-wrap"><bwp-video></bwp-video></div><span class="bpx-player-ctrl-time-current">00:38</span>'}));
+  await context.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><h1 class="video-title">真实扩展加载测试</h1><video id="unrelated-preview"></video><div class="bpx-player-video-wrap"><bwp-video></bwp-video></div><span class="bpx-player-ctrl-time-current">00:38</span><div class="video-toolbar-container"><div class="video-toolbar-left">点赞 投币 收藏 转发</div></div>'}));
   // Silent 12-second WAV: real native media clock, generated entirely locally.
   const wav=Buffer.alloc(44+8000*12,128);wav.write('RIFF',0);wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(8000,28);wav.writeUInt16LE(1,32);wav.writeUInt16LE(8,34);wav.write('data',36);wav.writeUInt32LE(wav.length-44,40);
   await context.route('https://www.bilibili.com/fixture.wav',r=>r.fulfill({contentType:'audio/wav',body:wav}));
@@ -22,8 +22,8 @@ const {fixture}=require('./bili-fixture.cjs');
   await context.route('https://aisubtitle.hdslb.com/**',r=>r.fulfill({headers:{'access-control-allow-origin':'*'},contentType:'application/json',body:JSON.stringify({body:[{from:0.25,to:3,content:'第一句字幕。'},{from:6.4,to:10,content:'第二句字幕。'},{from:37,to:41,content:'第三句字幕。'}]})}));
   const video=await context.newPage();await video.goto(`https://www.bilibili.com/video/${bvid}/`,{waitUntil:'domcontentloaded'});
   console.log('Fixture page ready');
-  await video.getByRole('button',{name:'BiliMemo · 字幕'}).waitFor();
-  await video.getByRole('button',{name:'BiliMemo · 字幕'}).click();
+  await video.getByRole('button',{name:'digest',exact:true}).waitFor();
+  await video.getByRole('button',{name:'digest',exact:true}).click();
   const tabId=await worker.evaluate(async()=> (await chrome.tabs.query({url:'https://www.bilibili.com/*'}))[0].id);
   await video.evaluate(()=>{document.querySelector('bwp-video').currentTime=38.25;});
   const isolatedTime=await worker.evaluate(async tabId=>(await chrome.scripting.executeScript({target:{tabId},func:()=>typeof document.querySelector('bwp-video').currentTime}))[0].result,tabId);
@@ -38,7 +38,8 @@ const {fixture}=require('./bili-fixture.cjs');
   const recovered=await worker.evaluate(async ({tabId,bvid})=>sendToVideoContent(tabId,{action:'getVideoInfo'},`bili:${bvid}:p1`),{tabId,bvid});
   assert.equal(recovered.title,'真实扩展加载测试');
   assert.equal(await video.locator('#bili-digest-controls').count(),1);
-  console.log('PASS: reproduced missing receiver, automatically restored receiver and one floating control');
+  assert.equal(await video.locator('.video-toolbar-left + #bili-digest-controls').count(),1);
+  console.log('PASS: reproduced missing receiver, automatically restored receiver and one toolbar entry');
   // The reported Blocked failure cannot affect subtitle or metadata retrieval.
   await worker.evaluate(()=>{chrome.scripting.executeScript=async()=>{throw Error('Blocked');};});
   const result=await worker.evaluate(async ({tabId,bvid})=>handleFetchTranscript(`bili:${bvid}:p1`,tabId),{tabId,bvid});
@@ -98,6 +99,6 @@ const {fixture}=require('./bili-fixture.cjs');
   await video.evaluate(()=>{document.querySelector('.bpx-player-video-wrap video').currentTime=3.5;});
   await panel.waitForFunction(()=>!document.querySelector('.transcript-entry.active-playback'));
   console.log('PASS: real sidepanel / custom clock fallback / main-player priority / native playback progression / paused backward seek / caption gaps, all with dynamic injection Blocked');
-  console.log('PASS: MV3 load / worker imports / floating content script / background subtitle fetch / source validation / settings sender and persistence / concurrent excerpts');
+  console.log('PASS: MV3 load / worker imports / toolbar content script / background subtitle fetch / source validation / settings sender and persistence / concurrent excerpts');
  }finally{await context.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,6 +1,6 @@
 {
   "name": "bilimemo",
-  "version": "0.1.12",
+  "version": "0.1.15",
   "private": true,
   "description": "Bilibili-first caption reader with playback sync, optional translation and chapter overviews.",
   "license": "MIT",
@@ -9,6 +9,7 @@
     "check": "node scripts/release.cjs",
     "package": "node scripts/release.cjs --package",
     "test:browser": "node tests/browser-smoke.cjs",
+    "test:options": "node tests/options-browser.cjs",
     "test:extension": "node tests/extension-smoke.cjs"
   },
   "devDependencies": {

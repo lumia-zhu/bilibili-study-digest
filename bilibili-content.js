@@ -71,34 +71,51 @@
       feedback("");
       chrome.runtime.sendMessage({ action: "videoPageChanged", videoId: video.id }).catch(() => {});
     }
-    if (buttons?.isConnected) {
-      const parent = document.fullscreenElement || document.body;
-      if (buttons.parentElement !== parent) parent.append(buttons);
+    // Bilibili gives the four native actions a fixed-width group. Mount next
+    // to that group, rather than inside it, so its spacing remains untouched.
+    const actions = document.querySelector('.video-toolbar-left');
+    if (!actions) {
+      buttons?.remove();
+      return;
+    }
+    if (buttons) {
+      if (actions.nextElementSibling !== buttons) actions.after(buttons);
       return;
     }
     buttons = document.createElement("div");
     buttons.id = "bili-digest-controls";
     const shadow = buttons.attachShadow({ mode: "open" });
-    // An isolated floating control stays usable across Bilibili's toolbar layouts.
+    // Shadow styles isolate the buttons. Host margin must also survive the
+    // site's outer CSS reset, otherwise space-between puts the entry mid-row.
     const style = document.createElement("style");
-    style.textContent = `:host{position:fixed;right:24px;bottom:84px;z-index:2147483000;font:14px system-ui,sans-serif}
-      .controls{display:flex;gap:6px;justify-content:flex-end}button{background:#c8674f;color:white;border:0;border-radius:20px;
-      padding:10px 16px;cursor:pointer;box-shadow:0 3px 12px #0002;font:600 14px system-ui,sans-serif}
-      button:hover{background:#b25742}button:focus-visible{outline:3px solid #00aeec;outline-offset:3px}
-      [role=status]{display:block;max-width:300px;color:#333;background:#fff;border-radius:8px;margin-top:6px}
-      [role=status]:not(:empty){padding:8px 12px;box-shadow:0 3px 12px #0002}`;
+    style.textContent = `:host{display:inline-flex;position:relative;align-self:center;flex:0 0 auto;
+      margin:0 auto 0 12px!important;vertical-align:middle;font:14px system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+      .controls{display:flex;align-items:center;gap:4px}
+      button{box-sizing:border-box;height:32px;padding:0 12px;border:0;border-radius:6px;
+        background:#0087bd;color:#fff;cursor:pointer;white-space:nowrap;font:500 14px/1 system-ui,-apple-system,"Microsoft YaHei",sans-serif}
+      button:hover{background:#0076a7}button:active{background:#006b98}
+      button:focus-visible{outline:2px solid #0087bd;outline-offset:3px}
+      .save-note{display:grid;place-items:center;width:32px;padding:0;background:transparent;color:var(--text2,#61666d)}
+      .save-note:hover,.save-note:active{background:#eaf6fc;color:#0076a7}
+      .save-note svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+      [role=status]{position:absolute;top:calc(100% + 8px);left:0;z-index:10;width:max-content;
+        max-width:240px;box-sizing:border-box;white-space:normal;line-height:1.5;color:#333;background:#fff;
+        border:1px solid #e3e8ed;border-radius:6px;pointer-events:none}
+      [role=status]:empty{display:none}[role=status]:not(:empty){padding:8px 12px;box-shadow:0 2px 8px #0001}`;
     const controls = document.createElement("div"); controls.className = "controls";
-    const open = document.createElement("button"); open.textContent = "BiliMemo · 字幕";
+    const open = document.createElement("button"); open.textContent = "digest"; open.type = "button";
     open.title = "打开字幕、概览与摘录";
     open.addEventListener("click", () => {
       chrome.runtime.sendMessage({ action: "openSidePanel" }).then(result => {
         if (!result?.success) feedback(result?.error || "请点击浏览器工具栏的扩展图标打开侧栏。");
       }).catch(() => feedback("请刷新页面后重试。"));
     });
-    const note = document.createElement("button"); note.textContent = "保存摘录";
+    const note = document.createElement("button"); note.type = "button"; note.className = "save-note";
+    note.title = "保存当前片段到摘录"; note.setAttribute("aria-label", "保存摘录");
+    note.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1Z"/><path d="M9 9h6m-3-3v6"/></svg>';
     note.addEventListener("click", saveNote);
     status = document.createElement("span"); status.setAttribute("role", "status");
-    controls.append(open, note); shadow.append(style, controls, status); (document.fullscreenElement || document.body).append(buttons);
+    controls.append(open, note); shadow.append(style, controls, status); actions.after(buttons);
   }
   const onMessage = (message, _sender, respond) => {
     if (!current() || (message.videoId && message.videoId !== current().id)) {

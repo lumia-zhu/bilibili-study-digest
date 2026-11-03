@@ -10,7 +10,7 @@ A browser extension for reading captions, finding passages and reviewing key poi
 
 [Download](https://github.com/lumia-zhu/bilibili-study-digest/releases) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **v0.1.12 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
+Current version: **v0.1.15 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
@@ -38,7 +38,7 @@ Paragraph mode (段落) uses shorter paragraphs, usually around 60–90 Chinese 
 
 ### 2. Open a Bilibili video
 
-Refresh existing video tabs. Open the side panel using the floating **BiliMemo · 字幕** button or the extension's toolbar icon.
+Refresh existing video tabs. Open the side panel using the sky-blue **digest** button next to Bilibili's Like / Coin / Favorite / Share actions, or the extension's browser toolbar icon. The small bookmark button beside digest saves the current passage as an excerpt.
 
 Try original captions, keyword search, click-to-seek and saving an excerpt first. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
 
@@ -48,7 +48,7 @@ Use **刷新字幕** beside the caption count to fetch the selected track again,
 
 To use translation or overview generation, enter your own API key, service URL and model in Settings. DeepSeek is the default configuration; compatible Chat Completions services can also be configured. Model availability depends on your provider and account.
 
-This step is optional for original-caption reading. Testing the connection sends one short request to the configured service.
+This step is optional for original-caption reading. Save settings first, then test the connection. Unsaved changes disable testing and show a save-first label. Testing sends one short request using the saved configuration. Expand Model and service URL to change providers.
 
 After updating, reload the extension and refresh video tabs. Keep the installation folder in place. Edge may install an independent unpacked copy, so make sure you update the folder it actually loads.
 
@@ -62,13 +62,13 @@ After updating, reload the extension and refresh video tabs. Keep the installati
 
 ## FAQ
 
-### Why do captions load without playback highlighting or the floating button?
+### Why do captions load without playback highlighting or the digest button?
 
 Caption fetching and the video-page connection use separate paths. Successful caption loading does not prove that playback synchronization is connected.
 
 For `PAGE_ACCESS_BLOCKED / Blocked` in Edge, keep the Bilibili tab open and check the site-level **Allow extensions on bilibili.com** switch at the top of the browser's extensions menu. Enable it, refresh the video page, then use the panel's reconnect button. This switch is separate from the extension's own site permissions.
 
-If it still fails, inspect the version and error code in the panel's synchronization diagnostics. Other browser policies can also block access; the code alone does not identify the cause.
+If it still fails, inspect the version and error code in the panel's synchronization diagnostics. Other browser policies can also block access; the code alone does not identify the cause. The digest entry follows the video action bar. In fullscreen or before the action bar loads, use the extension's browser toolbar icon to open the panel.
 
 ### Why are captions unavailable for some videos?
 
@@ -80,7 +80,7 @@ Long captions are processed in batches with checks for continuous source coverag
 
 ### Does it support YouTube?
 
-The inherited YouTube workflow requires a separate Supadata key. Development and testing currently focus on Bilibili; the real YouTube workflow has not completed validation.
+This preview focuses on Bilibili. The YouTube / Supadata settings are fully hidden, while their code and existing stored key are retained for future restoration. Saving AI settings preserves the existing Supadata key. The real YouTube workflow has not completed validation.
 
 ## Current scope
 
@@ -106,6 +106,7 @@ Optional browser tests:
 npm install
 npx playwright install chromium
 npm run test:browser
+npm run test:options
 npm run test:extension
 ```
 

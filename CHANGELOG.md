@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.1.15 — 2026-11-03（开发预览）
+
+- 将 B 站页面入口移到「点赞、投币、收藏、转发」旁，文案简化为 `digest`；使用参考发送按钮的天蓝色、小圆角与无阴影样式。
+- 保存摘录保留为入口旁的小书签按钮，支持提示文字与键盘焦点。操作栏延迟加载、页面切换或操作栏重建后自动恢复入口，避免重复添加；不再覆盖视频画面。
+- 一并发布 0.1.13 / 0.1.14 的天蓝图标和白底蓝色设置页更新：隐藏 YouTube / Supadata 配置并保留代码与已有密钥，明确先保存设置再测试连接。
+- 保留中英文说明、MIT 许可证及 Zara Zhang 和第三方来源声明。
+
+Moves the sky-blue `digest` entry beside Bilibili's native video actions, with a compact bookmark shortcut for saving excerpts. The entry recovers when the action bar mounts or is replaced. This preview also includes the blue icon and redesigned Settings from 0.1.13 / 0.1.14, with hidden but retained YouTube settings and save-before-test behavior.
+
+## v0.1.14 — 2026-11-03（本地预览）
+
+- 设置页改为白底、天蓝色按钮、细分隔线和简洁分区；沿用天蓝图标，保留中英文界面与窄窗口适配。
+- 完全隐藏 YouTube / Supadata 设置，保留代码与已有密钥；保存 AI 配置时继续保留隐藏字段。
+- 明确「保存设置 → 测试连接」顺序。未保存修改、缺少密钥、保存失败或测试进行中不发起新测试；编辑期间到达的旧测试结果不显示为当前配置结果。
+- 模型与服务地址可展开修改；删除摘录和重置操作收进折叠区域，保留确认提示。
+
+Redesigns Settings as a white and sky-blue page. YouTube / Supadata settings are hidden but retained. Connection testing requires a saved configuration; unsaved edits, storage failures and stale test results are handled explicitly. Local preview only.
+
+## v0.1.13 — 2026-11-03（本地预览）
+
+- 将插件图标替换为用户确认的天蓝色底，沿用圆角形状、白色播放三角与透明外缘；更新 16 / 48 / 128 / 512 像素图标，与侧栏蓝色配色呼应。
+- 本次仅更新图标与版本说明，字幕、播放同步、设置和摘录功能不变。
+
+Replaces the pink icon with the approved sky-blue variant in all four sizes, preserving the white play mark and transparent corners. No functional changes. Local preview only.
+
 ## v0.1.12 — 2026-11-02（开发预览）
 
 - 将「逐句」升级为「跟读」：保留原始片段，使用 16 px 字号、紧凑间距与浅蓝播放高亮，时间入口约每 15 秒显示一次；每条字幕仍可点击和使用键盘跳转。

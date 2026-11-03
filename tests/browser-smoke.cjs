@@ -413,16 +413,31 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
    console.log('PERF (isolated Edge, synthetic captions): '+JSON.stringify(timing));
  }
  assert.deepEqual(errors,[]);
- // Floating entry is also tested in a browser DOM after SPA changes and removal.
+ // Toolbar entry is also tested after delayed mounting, SPA changes and replacement.
  const floating=await context.newPage();await floating.goto('http://digest.test/sidepanel.html');
- await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html',body:'<h1>测试视频</h1><video></video>'}));
+ await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<h1>测试视频</h1><video></video><style>*{margin:0;padding:0}.video-toolbar-container{display:flex;align-items:center;justify-content:space-between;width:668px}.video-toolbar-left{display:flex;width:400px;flex-shrink:0;justify-content:space-around}.video-toolbar-right{width:148px}</style><div class="video-toolbar-container"></div>'}));
  await floating.goto('https://www.bilibili.com/video/BV1a6Yx62EH4/');
  await floating.addScriptTag({path:path.join(root,'platforms.js')});await floating.addScriptTag({path:path.join(root,'bilibili-content.js')});
- await floating.getByRole('button',{name:'BiliMemo · 字幕'}).click();
+ assert.equal(await floating.locator('#bili-digest-controls').count(),0);
+ await floating.locator('.video-toolbar-container').evaluate(el=>{el.innerHTML='<div class="video-toolbar-left"><span>点赞</span><span>投币</span><span>收藏</span><span>转发</span></div><div class="video-toolbar-right">笔记 · 更多</div>';});
+ await floating.getByRole('button',{name:'digest',exact:true}).click();
  assert.ok(await floating.evaluate(()=>__api.calls.some(m=>m.action==='openSidePanel')));
+ assert.ok(await floating.evaluate(()=>{
+   const host=document.getElementById('bili-digest-controls'), left=document.querySelector('.video-toolbar-left'), right=document.querySelector('.video-toolbar-right');
+   return left.nextElementSibling===host && host.parentElement===left.parentElement && getComputedStyle(host).position==='relative' && Math.abs(host.getBoundingClientRect().left-left.getBoundingClientRect().right-12)<1 && host.getBoundingClientRect().right<=right.getBoundingClientRect().left && right.getBoundingClientRect().right<=right.parentElement.getBoundingClientRect().right+1;
+ }));
+ await floating.mouse.move(0,0);
+ assert.equal(await floating.getByRole('button',{name:'digest',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 135, 189)');
+ await floating.getByRole('button',{name:'digest',exact:true}).focus();
+ await floating.keyboard.press('Tab');
+ assert.equal(await floating.getByRole('button',{name:'保存摘录',exact:true}).evaluate(el=>el.matches(':focus-visible')),true);
  await floating.evaluate(()=>{history.pushState({},'', '?p=2');document.getElementById('bili-digest-controls').remove();});
- await floating.getByRole('button',{name:'BiliMemo · 字幕'}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
- console.log('PASS: floating entry / click relay / SPA recovery / single instance');
+ await floating.getByRole('button',{name:'digest',exact:true}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
+ await floating.locator('.video-toolbar-container').evaluate(el=>{const next=el.cloneNode(true);next.querySelector('#bili-digest-controls').remove();el.replaceWith(next);});
+ await floating.getByRole('button',{name:'digest',exact:true}).waitFor();
+ assert.equal(await floating.locator('.video-toolbar-left + #bili-digest-controls').count(),1);
+ assert.equal(await floating.locator('#bili-digest-controls').count(),1);
+ console.log('PASS: toolbar entry / delayed mounting / narrow action bar / keyboard focus / click relay / SPA replacement / single instance');
  await context.close();
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

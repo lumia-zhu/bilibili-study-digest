@@ -17,7 +17,7 @@ test("manifest uses minimized install-time permissions", () => {
   assert.ok(!manifest.permissions.includes("activeTab"));
   assert.ok(manifest.host_permissions.includes("https://api.deepseek.com/*"));
   assert.equal(Object.hasOwn(manifest, "optional_host_permissions"), true);
-  assert.equal(manifest.version, "0.1.12");
+  assert.equal(manifest.version, "0.1.15");
 });
 
 test("release documents describe the fork and explicit AI costs", () => {
