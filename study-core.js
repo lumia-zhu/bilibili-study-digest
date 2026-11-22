@@ -10,6 +10,11 @@ var STUDY = (() => {
     return (Array.isArray(rows) ? rows : []).filter(r => typeof r.text === 'string' && r.text.trim() && Number.isFinite(r.start) && r.start >= 0)
       .map((r, i) => ({ id: `s${i}`, text: r.text.trim(), start: r.start, end: r.start + Math.max(0, Number(r.duration) || 0) }));
   }
+  // At a shared boundary the new cue wins. A declared end also preserves gaps.
+  function cueEnd(start, declaredEnd, nextStart) {
+    return Number.isFinite(declaredEnd) && declaredEnd > start
+      ? Math.min(declaredEnd, nextStart) : nextStart;
+  }
   // A single linear pass produces a display plan, never a rewritten transcript.
   // spaceBefore marks visual micro-gaps, never literal spaces or punctuation.
   function readingPlan(segments) {
@@ -137,6 +142,6 @@ var STUDY = (() => {
     if (missing && !partial) return { missing, text: null };
     return { missing, text: `${title}\n${url}\n模式：${mode}${missing ? `（部分结果，${missing} 段未翻译）` : ''}\n\n${lines.join('\n\n')}` };
   }
-  return { VERSION, time, captions, readingPlan, readingParagraphs, readingSeparator, batches, words, validateCleanup, validateOverview, mergeOverview, exportText };
+  return { VERSION, time, captions, cueEnd, readingPlan, readingParagraphs, readingSeparator, batches, words, validateCleanup, validateOverview, mergeOverview, exportText };
 })();
 if (typeof module !== 'undefined') module.exports = STUDY;

@@ -43,7 +43,7 @@ function pageHarness({ tracks, viewCode = 0, playerCode = 0, rows, part = 2, fet
 test("Bilibili identities isolate parts and preserve canonical seek links", () => {
   assert.equal(videos.parse(pageUrl + "&spm_id_from=tracking&t=9").id, id);
   assert.notEqual(videos.parse(pageUrl).id, videos.parse(pageUrl.replace("p=2", "p=1")).id);
-  assert.equal(videos.url(id, 91.9), pageUrl + "&t=91");
+  assert.equal(videos.url(id, 91.9), pageUrl + "&t=91.9");
   assert.equal(videos.parse("https://www.bilibili.com/video/av123/").id, "bili:av123:p1");
   assert.equal(videos.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ").id, "dQw4w9WgXcQ");
   assert.equal(videos.url("dQw4w9WgXcQ", 12), "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=12s");

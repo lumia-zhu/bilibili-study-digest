@@ -33,6 +33,8 @@ function studyReset() {
   if (studyEl('overviewSummary')) studyEl('overviewSummary').replaceChildren();
   if (studyEl('chapterList')) studyEl('chapterList').replaceChildren();
   if (studyEl('quotesList')) studyEl('quotesList').replaceChildren();
+  studyEl('overviewChapters').hidden = true;
+  studyEl('overviewQuotes').hidden = true;
 }
 const upstreamSegments = getActiveTranscriptSegments;
 getActiveTranscriptSegments = function () {
@@ -174,7 +176,10 @@ renderAnalysisResults = function (analysis) {
     const save = document.createElement('button'); save.className = 'enhance-btn'; save.textContent = '保存摘录'; save.addEventListener('click', () => saveQuoteAsNote(quote, save));
     card.append(text, jump, save); quotes.append(card);
   }
-  if (!analysis.keyQuotes?.length) quotes.textContent = '本次没有可核对的金句原文。';
+  // Partial or cached results can contain only one kind of content.
+  // Reveal each section independently; an empty heading is not a result.
+  studyEl('overviewChapters').hidden = !list.children.length;
+  studyEl('overviewQuotes').hidden = !quotes.children.length;
 };
 
 async function studyFullTranslation() {

@@ -417,6 +417,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message.videoTitle,
       message.channelName,
       message.selectedText,
+      sender.tab?.id,
+      message.timeSource,
     )
       .then(sendResponse)
       .catch((err) => sendResponse({ success: false, error: err.message }));
@@ -1224,177 +1226,75 @@ async function handleGetVideoInfo(tabId) {
 // NOTE MANAGEMENT
 // ============================================================
 
-/**
- * Saves a note at a timestamp. Exact selected text is stored directly.
- * Other note requests find the relevant transcript line and clean it up.
- */
-async function handleSaveNote(
-  videoId,
-  timestamp,
-  videoTitle,
-  channelName,
-  selectedText,
-) {
+async function readNoteTranscript(videoId, tabId) {
+  const key = `digest_${videoId}`;
+  const cached = (await chrome.storage.local.get(key).catch(() => ({})))[key];
+  if (Array.isArray(cached?.transcript) && cached.transcript.length &&
+      DIGEST_VIDEO.validTranscriptSource(videoId, cached.source)) {
+    return { success: true, transcript: cached.transcript };
+  }
+  return handleFetchTranscript(videoId, tabId);
+}
+
+function matchBilibiliNote(transcript, seconds, timeSource) {
+  for (let i = 0; i < transcript.length; i++) {
+    const row = transcript[i];
+    if (row.start > seconds) break;
+    const nextStart = transcript[i + 1]?.start ?? Infinity;
+    const end = STUDY.cueEnd(row.start, row.start + row.duration, nextStart);
+    if (seconds >= end) continue;
+    // The displayed clock tells us only which whole second the click was in.
+    if (timeSource === "clock" && end < seconds + 1) {
+      return { success: false, error: "AMBIGUOUS_CAPTION", message: "这一秒内字幕有变化，请在侧栏选中要保存的原文。" };
+    }
+    return { success: true, text: row.text, timestamp: row.start };
+  }
+  return { success: false, error: "NO_ACTIVE_CAPTION", message: "当前时间没有可确认的字幕。可以在侧栏选中原文保存。" };
+}
+
+async function handleSaveNote(videoId, timestamp, videoTitle, channelName, selectedText, tabId, timeSource) {
   try {
-    const canonicalVideoUrl = DIGEST_VIDEO.url(videoId);
-    const safeTimestamp = Math.max(0, Math.floor(Number(timestamp) || 0));
-    const exactSelectedText =
-      typeof selectedText === "string"
-        ? selectedText.replace(/\s+/g, " ").trim().slice(0, 3000)
-        : "";
-
-    // A selected transcript note is already the exact text the user wants.
-    // Save it directly without a transcript fetch or an AI cleanup request.
-    if (exactSelectedText) {
-      const minutes = Math.floor(safeTimestamp / 60);
-      const seconds = safeTimestamp % 60;
-      const note = {
-        id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        videoId,
-        videoTitle:
-          typeof videoTitle === "string"
-            ? videoTitle.slice(0, 500)
-            : "Untitled Video",
-        channelName:
-          typeof channelName === "string" ? channelName.slice(0, 300) : "",
-        timestamp: `${minutes}:${String(seconds).padStart(2, "0")}`,
-        timestampSeconds: safeTimestamp,
-        timestampedUrl: DIGEST_VIDEO.url(videoId, safeTimestamp),
-        text: exactSelectedText,
-        rawText: exactSelectedText,
-        createdAt: Date.now(),
-      };
-
-      await saveNoteToStorage(note);
-      chrome.runtime.sendMessage({ action: "noteSaved", note }).catch(() => {});
-      return { success: true, note };
+    const isBilibili = DIGEST_VIDEO.fromId(videoId)?.platform === "bilibili";
+    if (isBilibili && (!Number.isFinite(timestamp) || timestamp < 0)) {
+      return { success: false, error: "PLAYER_TIME_UNAVAILABLE", message: "暂时读不到播放时间，请稍后重试。" };
     }
-
-    // First, try to get the transcript from the digest cache. The side panel
-    // saves digests to chrome.storage.LOCAL — this used to look in
-    // storage.session (the wrong store), so it missed every time and
-    // refetched the transcript from Supadata on every saved note.
-    let transcript = null;
-    try {
-      const cached = await chrome.storage.local.get(`digest_${videoId}`);
-      if (cached[`digest_${videoId}`]?.transcript && DIGEST_VIDEO.validTranscriptSource(videoId, cached[`digest_${videoId}`].source)) {
-        transcript = cached[`digest_${videoId}`].transcript;
-        debugLog("[BiliMemo] Using cached transcript for note");
-      }
-    } catch (e) {
-      debugLog("[BiliMemo] No cached transcript, fetching...");
-    }
-
-    // If no cached transcript, fetch it
-    if (!transcript) {
-      const transcriptResult = await handleFetchTranscript(videoId);
-      if (!transcriptResult.success) {
-        return { success: false, error: transcriptResult.error, message: transcriptResult.message || "Could not fetch transcript" };
-      }
-      transcript = transcriptResult.transcript;
-    }
-
-    // Find the transcript line at the current timestamp
-    // Look for the line that contains this timestamp (or the closest one before)
-    let matchedLine = null;
-    let matchedIndex = 0;
-    let contextLines = [];
-    let beforeLine = null; // a few sentences before
-    let afterLine = null; // a few sentences after
-
-    for (let i = 0; i < transcript.length; i++) {
-      const line = transcript[i];
-      if (
-        line.start <= safeTimestamp &&
-        (!transcript[i + 1] || transcript[i + 1].start > safeTimestamp)
-      ) {
-        matchedLine = line;
-        matchedIndex = i;
-
-        // Build a buffer of 2 lines before and 4 lines after the target.
-        // This gives the model enough text to find a natural sentence boundary
-        // and complete a thought that spans multiple short caption chunks.
-        const beforeLines = [];
-        for (let j = 1; j <= 2 && i - j >= 0; j++) {
-          beforeLines.unshift(transcript[i - j].text);
-        }
-        if (beforeLines.length > 0) {
-          beforeLine = beforeLines.join(" ");
-        }
-
-        const afterLines = [];
-        for (let j = 1; j <= 4 && i + j < transcript.length; j++) {
-          afterLines.push(transcript[i + j].text);
-        }
-        if (afterLines.length > 0) {
-          afterLine = afterLines.join(" ");
-        }
-
-        // Get broader context (8 lines before and 12 lines after) for understanding
-        const startIdx = Math.max(0, i - 8);
-        const endIdx = Math.min(transcript.length - 1, i + 12);
-        for (let j = startIdx; j <= endIdx; j++) {
-          contextLines.push(transcript[j].text);
-        }
-        break;
+    let noteSeconds = isBilibili ? timestamp : Math.max(0, Math.floor(Number(timestamp) || 0));
+    let text = typeof selectedText === "string" ? selectedText.replace(/\s+/g, " ").trim().slice(0, 3000) : "";
+    if (!text) {
+      const result = await readNoteTranscript(videoId, tabId);
+      if (!result.success) return result;
+      const rows = result.transcript;
+      if (isBilibili) {
+        const match = matchBilibiliNote(rows, noteSeconds, timeSource);
+        if (!match.success) return match;
+        text = match.text;
+        noteSeconds = match.timestamp;
+      } else {
+        // Preserve the existing YouTube bookmark lookup.
+        const row = rows.find((cue, i) => cue.start <= noteSeconds &&
+          (!rows[i + 1] || rows[i + 1].start > noteSeconds)) || rows.at(-1);
+        if (!row) return { success: false, error: "NO_TRANSCRIPT" };
+        text = row.text;
       }
     }
 
-    if (!matchedLine) {
-      // Fallback: use the last line if timestamp is beyond transcript
-      matchedLine = transcript[transcript.length - 1];
-      matchedIndex = transcript.length - 1;
-
-      // Get buffer sentence (only before, since we're at the end)
-      const beforeLines = [];
-      for (let j = 1; j <= 2 && matchedIndex - j >= 0; j++) {
-        beforeLines.unshift(transcript[matchedIndex - j].text);
-      }
-      if (beforeLines.length > 0) {
-        beforeLine = beforeLines.join(" ");
-      }
-
-      const startIdx = Math.max(0, matchedIndex - 8);
-      for (let j = startIdx; j <= matchedIndex; j++) {
-        contextLines.push(transcript[j].text);
-      }
-    }
-
-    // Clean up the text with DeepSeek.
-    const cleanedText = matchedLine.text; // Save immediately, with no hidden AI call.
-
-    // Format timestamp as MM:SS
-    const minutes = Math.floor(safeTimestamp / 60);
-    const seconds = safeTimestamp % 60;
-    const formattedTimestamp = `${minutes}:${String(seconds).padStart(2, "0")}`;
-
-    // Create timestamped URL
-    const timestampedUrl = DIGEST_VIDEO.url(videoId, safeTimestamp);
-
-    // Create the note object
+    const minutes = Math.floor(noteSeconds / 60);
+    const seconds = String(Math.floor(noteSeconds) % 60).padStart(2, "0");
+    const fraction = String(noteSeconds).split(".")[1];
     const note = {
       id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      videoId: videoId,
-      videoTitle:
-        typeof videoTitle === "string"
-          ? videoTitle.slice(0, 500)
-          : "Untitled Video",
-      channelName:
-        typeof channelName === "string" ? channelName.slice(0, 300) : "",
-      timestamp: formattedTimestamp,
-      timestampSeconds: safeTimestamp,
-      timestampedUrl: timestampedUrl,
-      text: cleanedText,
-      rawText: matchedLine.text,
+      videoId,
+      videoTitle: typeof videoTitle === "string" ? videoTitle.slice(0, 500) : "Untitled Video",
+      channelName: typeof channelName === "string" ? channelName.slice(0, 300) : "",
+      timestamp: `${minutes}:${seconds}${fraction ? "." + fraction : ""}`,
+      timestampSeconds: noteSeconds,
+      timestampedUrl: DIGEST_VIDEO.url(videoId, noteSeconds),
+      text,
+      rawText: text,
       createdAt: Date.now(),
     };
-
-    // Save to storage
     await saveNoteToStorage(note);
-
-    // Notify side panel to refresh notes list
     chrome.runtime.sendMessage({ action: "noteSaved", note }).catch(() => {});
-
     return { success: true, note };
   } catch (error) {
     console.error("[BiliMemo] Save note error:", error);

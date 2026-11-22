@@ -9,6 +9,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{})});
  try {
  const context=await browser.newContext({viewport:{width:360,height:740}});
+ context.setDefaultTimeout(15000);
  await context.route('**/*',route=>{
    const u=new URL(route.request().url()), name=u.pathname.slice(1)||'sidepanel.html';
    if(u.hostname==='digest.test' && /^[\w./-]+$/.test(name) && !name.includes('..') && fs.existsSync(path.join(root,name))) {
@@ -50,6 +51,38 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  }, {version});
  const page=await context.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://digest.test/sidepanel.html');
+ await page.locator('#tabsNav').waitFor();
+ assert.deepEqual(await page.locator('#tabsNav .tab').allTextContents(),['概览','摘录','字幕']);
+ assert.equal(await page.locator('.tab.active').getAttribute('data-tab'),'overview');
+ assert.equal(await page.locator('#generateOverviewBtn').isVisible(),true);
+ assert.equal(await page.locator('#overviewChapters').isVisible(),false);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),false);
+ assert.equal(await page.evaluate(()=>__api.paid),0);
+ await page.screenshot({animations:'disabled',path:path.join(root,'dist',`overview-empty-v${version}.png`)});
+ // Cached/partial results reveal only sections with content, and resetting a
+ // video or caption track clears their headings as well as their contents.
+ await page.evaluate(()=>renderAnalysisResults({chapters:[{title:'已有章节',timestampSeconds:0,summary:'已缓存的内容'}]}));
+ assert.equal(await page.locator('#overviewChapters').isVisible(),true);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),false);
+ await page.evaluate(()=>renderAnalysisResults({keyQuotes:[{quote:'可核对的原文',timestampSeconds:0}]}));
+ assert.equal(await page.locator('#overviewChapters').isVisible(),false);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),true);
+ await page.evaluate(async()=>{
+   currentAnalysis={chapters:[{title:'缓存章节',timestampSeconds:0,summary:'缓存内容'}],keyQuotes:[]};
+   await saveToCache(currentVideoId);
+   const id=currentVideoId; currentVideoId=null;
+   await startDigest(id,currentVideoUrl);
+ });
+ assert.equal(await page.locator('#overviewChapters').isVisible(),true);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),false);
+ assert.equal(await page.evaluate(()=>__api.paid),0);
+ await page.evaluate(()=>{currentAnalysis=null;studyState.key='';renderTranscript();});
+ assert.equal(await page.locator('#overviewChapters').isVisible(),false);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),false);
+ await page.click('[data-tab=notes]');
+ await page.click('[data-tab=overview]');
+ assert.equal(await page.evaluate(()=>__api.calls.some(m=>['studyAiBatch','analyzeTranscript','translateContent'].includes(m.action))),false);
+ await page.click('[data-tab=transcript]');
  await page.locator('#transcriptList .transcript-entry').first().waitFor();
  assert.equal(await page.locator('#transcriptList .transcript-entry').count(),14);
  assert.equal(await page.evaluate(()=>__api.paid),0);
@@ -87,6 +120,8 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  await page.evaluate(()=>{__api.count=330;__api.failNext=true;currentTranscript=Array.from({length:330},(_,i)=>({text:`字幕${i}。`+'完整保留这段学习材料，避免概览遗漏结尾。'.repeat(3),start:i*20,duration:20}));studyState.key='';renderTranscript();});
  await page.click('[data-tab=overview]');await page.click('#generateOverviewBtn');await page.waitForFunction(()=>!studyState.busy);
  assert.ok(await page.evaluate(()=>currentAnalysis.completed<currentAnalysis.total));
+ assert.equal(await page.locator('#overviewChapters').isVisible(),true);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),true);
  const before=await page.evaluate(()=>__api.paid);await page.click('#generateOverviewBtn');await page.waitForFunction(()=>!studyState.busy);
  assert.equal(await page.evaluate(()=>__api.paid),before+1);
  assert.equal(await page.evaluate(()=>currentAnalysis.chapters.at(-1).endSeconds),6600);
@@ -101,6 +136,8 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  // Track switching clears stale overview and preserves the raw-first rule.
  await page.selectOption('#subtitleTrack','en');await page.waitForFunction(()=>currentTranscriptLanguage==='en');
  assert.equal(await page.evaluate(()=>currentAnalysis),null);
+ assert.equal(await page.locator('#overviewChapters').isVisible(),false);
+ assert.equal(await page.locator('#overviewQuotes').isVisible(),false);
  assert.equal(await page.evaluate(()=>currentTranscriptMode),'original');
  await page.click('[data-tab=transcript]');
  await page.click('[data-transcript-mode=bilingual]');await page.waitForFunction(()=>transcriptParagraphCache.size>0);
@@ -141,6 +178,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  // Short platform cues must read as paragraphs without losing their identity.
  const reader=await context.newPage();reader.on('pageerror',e=>errors.push(e.message));
  await reader.goto('http://digest.test/sidepanel.html');
+ await reader.click('[data-tab=transcript]');
  await reader.locator('.transcript-entry').first().waitFor();
  assert.equal(await reader.locator('[data-reading-layout=sentence]').getAttribute('aria-pressed'),'true');
  await reader.getByRole('button',{name:'段落',exact:true}).click();
@@ -199,6 +237,18 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  assert.equal(await reader.evaluate(()=>__api.calls.filter(m=>m.payload?.action==='seekTo').at(-1)?.payload.seconds),4.8);
  await reader.evaluate(async()=>{await saveCurrentTranscriptViewState();__api.savedView=await loadTranscriptViewState(currentVideoId);});
  assert.equal(await reader.evaluate(()=>__api.savedView.layout),'sentence');
+ // Restoring a cached video must not scroll Overview to the caption position.
+ await reader.evaluate(async()=>{
+   await saveToCache(currentVideoId);
+   switchTab('overview');
+   const id=currentVideoId;currentVideoId=null;
+   await startDigest(id,currentVideoUrl);
+ });
+ await reader.waitForFunction(()=>document.getElementById('contentArea').scrollTop===0 && !document.getElementById('contentArea').classList.contains('restoring-transcript-view'));
+ assert.equal(await reader.locator('#generateOverviewBtn').isVisible(),true);
+ await reader.click('[data-tab=transcript]');
+ await reader.waitForFunction(()=>!isRestoringTranscriptView && Math.abs(document.getElementById('contentArea').scrollTop-__api.savedView.scrollTop)<2);
+ assert.equal(await reader.evaluate(()=>autoScrollEnabled),false);
  await reader.getByRole('button',{name:'段落',exact:true}).click();
  assert.deepEqual(await reader.locator('.transcript-text').allTextContents(),original);
  assert.equal(await reader.evaluate(()=>__api.paid),0);
@@ -277,7 +327,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  console.log('PASS: visual-only micro-gaps / raw selection and excerpts / copy and export / cross-gap search / cached layout / source invalidation / no AI');
  // Refresh is a provider request, not a cache reopen, and failure is atomic.
  const refreshing=await context.newPage();refreshing.on('pageerror',e=>errors.push(e.message));
- await refreshing.goto('http://digest.test/sidepanel.html');await refreshing.locator('.transcript-entry').first().waitFor();
+ await refreshing.goto('http://digest.test/sidepanel.html');await refreshing.click('[data-tab=transcript]');await refreshing.locator('.transcript-entry').first().waitFor();
  await refreshing.evaluate(async()=>{currentAnalysis={chapters:[],summaries:[],keyQuotes:[],sentinel:'keep'};__api.notes=[{id:'saved',text:'保留摘录'}];await saveToCache(currentVideoId);});
  const countFetch=()=>refreshing.evaluate(()=>__api.calls.filter(m=>m.action==='fetchTranscript').length);
  const refresh=async()=>{await refreshing.getByRole('button',{name:'刷新字幕',exact:true}).click();await refreshing.waitForFunction(()=>!subtitleReloadRequest);};
@@ -318,7 +368,7 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
  assert.equal(await refreshing.locator('#studyStatus').innerText(),'新视频状态');
  console.log('PASS: refresh bypasses cache / preserves selected track and unchanged overview / invalidates stale overview / errors retain old captions / double-click / timeout / stale response / notes / zero AI');
  const dense=await context.newPage();dense.on('pageerror',e=>errors.push(e.message));
- await dense.goto('http://digest.test/sidepanel.html');await dense.locator('.transcript-entry').first().waitFor();
+ await dense.goto('http://digest.test/sidepanel.html');await dense.click('[data-tab=transcript]');await dense.locator('.transcript-entry').first().waitFor();
  const fixture=process.env.READING_FIXTURE?JSON.parse(fs.readFileSync(process.env.READING_FIXTURE,'utf8')):null;
  const denseInfo=await dense.evaluate(fixture=>{
    currentTranscript=fixture?.transcript||Array.from({length:610},(_,i)=>({text:'这是平台提供的连续字幕内容',start:i*2,duration:2}));
@@ -413,31 +463,52 @@ const version=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8')
    console.log('PERF (isolated Edge, synthetic captions): '+JSON.stringify(timing));
  }
  assert.deepEqual(errors,[]);
- // Toolbar entry is also tested after delayed mounting, SPA changes and replacement.
+ // The entry must preserve the site's server-rendered tree before it hydrates.
  const floating=await context.newPage();await floating.goto('http://digest.test/sidepanel.html');
- await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<h1>测试视频</h1><video></video><style>*{margin:0;padding:0}.video-toolbar-container{display:flex;align-items:center;justify-content:space-between;width:668px}.video-toolbar-left{display:flex;width:400px;flex-shrink:0;justify-content:space-around}.video-toolbar-right{width:148px}</style><div class="video-toolbar-container"></div>'}));
+ await floating.setViewportSize({width:1080,height:740});
+ await floating.route('https://www.bilibili.com/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:'<h1>测试视频</h1><video></video><style>*{margin:0;padding:0}body{min-height:2000px}.video-toolbar-container{display:flex;align-items:center;justify-content:space-between;width:668px;height:52px}.video-toolbar-left{display:flex;width:400px;flex-shrink:0;justify-content:space-around}.video-toolbar-right{width:128px}</style><div id="app"><div class="video-toolbar-container"></div><section id="comments"></section><aside id="recommendations"></aside></div>'}));
  await floating.goto('https://www.bilibili.com/video/BV1a6Yx62EH4/');
  await floating.addScriptTag({path:path.join(root,'platforms.js')});await floating.addScriptTag({path:path.join(root,'bilibili-content.js')});
  assert.equal(await floating.locator('#bili-digest-controls').count(),0);
- await floating.locator('.video-toolbar-container').evaluate(el=>{el.innerHTML='<div class="video-toolbar-left"><span>点赞</span><span>投币</span><span>收藏</span><span>转发</span></div><div class="video-toolbar-right">笔记 · 更多</div>';});
- await floating.getByRole('button',{name:'字幕',exact:true}).click();
+ await floating.locator('.video-toolbar-container').evaluate(el=>{el.innerHTML='<div class="video-toolbar-left"><span>点赞</span><span>投币</span><span>收藏</span><span>转发</span></div><div class="video-toolbar-right">笔记 · 更多</div>';window.__nativeTree=document.getElementById('app').innerHTML;});
+ await floating.getByRole('button',{name:'AI总结',exact:true}).click();
  assert.ok(await floating.evaluate(()=>__api.calls.some(m=>m.action==='openSidePanel')));
+ assert.equal(await floating.evaluate(()=>document.getElementById('app').innerHTML===window.__nativeTree),true,'Extension must not change the app DOM before hydration');
+ await floating.evaluate(()=>{
+   document.getElementById('comments').textContent='正常加载的评论';
+   const cover=document.createElement('img');cover.alt='推荐视频封面';
+   cover.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="skyblue"/></svg>');
+   document.getElementById('recommendations').append(cover);
+ });
+ await floating.waitForFunction(()=>document.querySelector('#recommendations img').naturalWidth===120);
+ assert.equal(await floating.locator('#comments').innerText(),'正常加载的评论');
  assert.ok(await floating.evaluate(()=>{
    const host=document.getElementById('bili-digest-controls'), left=document.querySelector('.video-toolbar-left'), right=document.querySelector('.video-toolbar-right');
-   return left.nextElementSibling===host && host.parentElement===left.parentElement && getComputedStyle(host).position==='relative' && Math.abs(host.getBoundingClientRect().left-left.getBoundingClientRect().right-12)<1 && host.getBoundingClientRect().right<=right.getBoundingClientRect().left && right.getBoundingClientRect().right<=right.parentElement.getBoundingClientRect().right+1;
+   return left.nextElementSibling===right && host.parentElement===document.body && getComputedStyle(host).position==='fixed' && Math.abs(host.getBoundingClientRect().left-left.getBoundingClientRect().right-12)<1 && host.getBoundingClientRect().right<=right.getBoundingClientRect().left && right.getBoundingClientRect().right<=right.parentElement.getBoundingClientRect().right+1;
  }));
  await floating.mouse.move(0,0);
- assert.equal(await floating.getByRole('button',{name:'字幕',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 135, 189)');
- await floating.getByRole('button',{name:'字幕',exact:true}).focus();
+ assert.equal(await floating.getByRole('button',{name:'AI总结',exact:true}).evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 135, 189)');
+ await floating.getByRole('button',{name:'AI总结',exact:true}).focus();
  await floating.keyboard.press('Tab');
  assert.equal(await floating.getByRole('button',{name:'保存摘录',exact:true}).evaluate(el=>el.matches(':focus-visible')),true);
+ await floating.locator('.video-toolbar-right').evaluate(el=>el.style.width='197px');
+ await floating.waitForFunction(()=>document.getElementById('bili-digest-controls').hasAttribute('data-compact'));
+ assert.equal(await floating.getByRole('button',{name:'AI总结',exact:true}).isVisible(),true);
+ assert.equal(await floating.getByRole('button',{name:'保存摘录',exact:true}).isVisible(),false);
+ await floating.locator('.video-toolbar-right').evaluate(el=>el.style.width='128px');
+ await floating.waitForFunction(()=>!document.getElementById('bili-digest-controls').hasAttribute('data-compact'));
+ await floating.evaluate(()=>window.scrollTo(0,600));
+ await floating.waitForFunction(()=>document.getElementById('bili-digest-controls').hidden);
+ await floating.evaluate(()=>window.scrollTo(0,0));
+ await floating.getByRole('button',{name:'AI总结',exact:true}).waitFor();
  await floating.evaluate(()=>{history.pushState({},'', '?p=2');document.getElementById('bili-digest-controls').remove();});
- await floating.getByRole('button',{name:'字幕',exact:true}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
- await floating.locator('.video-toolbar-container').evaluate(el=>{const next=el.cloneNode(true);next.querySelector('#bili-digest-controls').remove();el.replaceWith(next);});
- await floating.getByRole('button',{name:'字幕',exact:true}).waitFor();
- assert.equal(await floating.locator('.video-toolbar-left + #bili-digest-controls').count(),1);
+ await floating.getByRole('button',{name:'AI总结',exact:true}).waitFor();assert.equal(await floating.locator('#bili-digest-controls').count(),1);
+ await floating.locator('.video-toolbar-container').evaluate(el=>{const next=el.cloneNode(true);el.replaceWith(next);window.__nativeTree=document.getElementById('app').innerHTML;});
+ await floating.getByRole('button',{name:'AI总结',exact:true}).waitFor();
+ assert.equal(await floating.locator('#app #bili-digest-controls').count(),0);
+ assert.equal(await floating.evaluate(()=>document.getElementById('app').innerHTML===window.__nativeTree),true);
  assert.equal(await floating.locator('#bili-digest-controls').count(),1);
- console.log('PASS: toolbar entry / delayed mounting / narrow action bar / keyboard focus / click relay / SPA replacement / single instance');
+ console.log('PASS: unmodified app DOM before hydration / comments and cover initialization / delayed toolbar / narrow action bar / scroll hiding / keyboard focus / click relay / SPA replacement / single instance');
  await context.close();
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

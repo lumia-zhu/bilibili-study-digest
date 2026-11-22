@@ -6,11 +6,11 @@
 
 A browser extension for reading captions, finding passages and reviewing key points alongside Bilibili videos. Useful for courses, interviews and other long videos.
 
-**Start with original captions in Follow mode, or switch to Paragraph mode to browse longer passages.** Both layouts, search and playback highlighting require no AI key. Translation and overview generation are available on request.
+**The sidebar opens Overview first; switch to Captions for Follow or Paragraph reading.** Both layouts, search and playback highlighting require no AI key. Translation and overview generation are available on request.
 
 [Download](https://github.com/lumia-zhu/bilibili-study-digest/releases) · [Installation](#installation) · [FAQ](#faq) · [Changelog](CHANGELOG.md)
 
-Current version: **[v0.1.16 development preview](https://github.com/lumia-zhu/bilibili-study-digest/releases/tag/v0.1.16)** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
+Current local version: **v0.1.19 development preview** for Edge / Chrome. Not published in extension stores. Independently maintained and MIT licensed; see [attribution and license](#attribution-and-mit-license) below.
 
 ## Features
 
@@ -38,9 +38,11 @@ Paragraph mode (段落) uses shorter paragraphs, usually around 60–90 Chinese 
 
 ### 2. Open a Bilibili video
 
-Refresh existing video tabs. Open the side panel using the sky-blue **字幕** (Captions) button next to Bilibili's Like / Coin / Favorite / Share actions, or the extension's browser toolbar icon. The small bookmark button beside Captions saves the current passage as an excerpt.
+Refresh existing video tabs. Open the side panel using the sky-blue **AI总结** (AI Summary) button next to Bilibili's Like / Coin / Favorite / Share actions, or the extension's browser toolbar icon. The small bookmark button beside AI Summary saves the current passage as an excerpt.
 
-Try original captions, keyword search, click-to-seek and saving an excerpt first. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
+Tabs are ordered **Overview → Excerpts → Captions**, with Overview selected initially. Empty chapter and quote sections stay hidden. Generation starts only when you click **生成／继续概览**; cached results open without another AI request.
+
+Switch to **字幕** (Captions) to try original captions, keyword search, click-to-seek and saving an excerpt. These features require no AI key. Some platform captions require signing into Bilibili. Grant caption-service access if prompted.
 
 Use **刷新字幕** beside the caption count to fetch the selected track again, bypassing local and browser HTTP caches. Existing captions stay readable while loading and are retained on failure or after a 30-second timeout. A successful refresh returns to Original mode. Unchanged captions keep their overview; changed text or timing clears the old overview for optional regeneration. Excerpts are preserved. Refreshing makes no model calls; YouTube refreshes use your configured Supadata service and quota.
 
@@ -62,7 +64,11 @@ After updating, reload the extension and refresh video tabs. Keep the installati
 
 ## FAQ
 
-### Why do captions load without playback highlighting or the Captions button?
+### Why did comments and recommendation covers stop loading with an older version?
+
+Versions 0.1.15 / 0.1.16 inserted the entry into Bilibili's action-bar DOM, which could interrupt page initialization. Version 0.1.17 keeps the entry in an independent container and only reads the action bar's position. Reload the updated extension, then refresh the video page so Bilibili can initialize again.
+
+### Why do captions load without playback highlighting or the AI Summary button?
 
 Caption fetching and the video-page connection use separate paths. Successful caption loading does not prove that playback synchronization is connected.
 

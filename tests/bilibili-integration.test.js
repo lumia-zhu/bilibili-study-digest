@@ -134,6 +134,34 @@ test("selected Bilibili notes persist exact text and part-aware URLs without API
   assert.ok(Object.values(h.store).some(value => JSON.stringify(value).includes("关键观点")));
 });
 
+test("Bilibili bookmarks use the cue at the click and replay at that cue's fractional start", async () => {
+  const h = backgroundHarness();
+  const {source} = await h.sandbox.handleFetchTranscript(id, 7);
+  h.store[`digest_${id}`] = {source, transcript: [
+    { start: 1.25, duration: 3, text: '获取信息' },
+    { start: 3.65, duration: 1.5, text: '完成任务' },
+    { start: 7, duration: 1, text: '第三句' },
+  ]};
+  const save = (t, source = 'media') => h.sandbox.handleSaveNote(id, t, '课程', '老师', undefined, 7, source);
+  assert.equal((await save(3.649)).note.text, '获取信息');
+  for (const t of [3.65, 3.75, 4.9]) {
+    const {note} = await save(t);
+    assert.equal(note.text, '完成任务');
+    assert.equal(note.timestamp, '0:03.65');
+    assert.equal(note.timestampSeconds, 3.65);
+    assert.equal(new URL(note.timestampedUrl).searchParams.get('t'), '3.65');
+  }
+  assert.equal((await save(4, 'clock')).note.text, '完成任务');
+  const count = h.store.ytd_notes.length;
+  assert.equal((await save(3, 'clock')).error, 'AMBIGUOUS_CAPTION');
+  for (const t of [0, 5.15, 6.99, 8, 100]) assert.equal((await save(t)).error, 'NO_ACTIVE_CAPTION');
+  for (const t of [null, NaN, -1]) assert.equal((await save(t)).error, 'PLAYER_TIME_UNAVAILABLE');
+  assert.equal(h.store.ytd_notes.length, count);
+  const selected = await h.sandbox.handleSaveNote(id, 3.65, '课程', '老师', '完成');
+  assert.equal(selected.note.timestampSeconds, 3.65);
+  assert.equal(selected.note.text, '完成');
+});
+
 test('concurrent excerpt writes keep every note and never silently truncate at 100', async () => {
   const h=backgroundHarness();
   h.store.ytd_notes=Array.from({length:100},(_,i)=>({id:`old-${i}`,videoId:id,timestamp:i,text:`旧摘录${i}`}));

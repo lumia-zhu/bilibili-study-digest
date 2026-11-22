@@ -36,8 +36,8 @@ var DIGEST_VIDEO = (() => {
       ? `https://www.bilibili.com/video/${video.video}/?p=${video.part}`
       : `https://www.youtube.com/watch?v=${video.id}`);
     if (seconds !== undefined) {
-      const time = Math.max(0, Math.floor(Number(seconds) || 0));
-      u.searchParams.set("t", video.platform === "youtube" ? `${time}s` : String(time));
+      const time = Math.max(0, Number(seconds) || 0);
+      u.searchParams.set("t", video.platform === "youtube" ? `${Math.floor(time)}s` : String(time));
     }
     return u.href;
   }

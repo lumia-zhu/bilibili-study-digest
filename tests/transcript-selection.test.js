@@ -79,7 +79,7 @@ test("leaving Transcript dismisses its selection actions", () => {
 test("Notes opens at its newest item and Transcript keeps its position", () => {
   assert.match(
     source,
-    /if \(tabName === "notes"\)[\s\S]*notesPanelIsActive[\s\S]*contentArea\.scrollTop = 0/,
+    /if \(tabName === "overview" \|\| tabName === "notes"\)[\s\S]*resultTabIsActive\(tabName\)[\s\S]*contentArea\.scrollTop = 0/,
   );
   assert.match(
     source,

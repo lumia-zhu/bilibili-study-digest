@@ -64,9 +64,9 @@
 
       <!-- Tab navigation -->
       <div class="tabs" id="tabsNav" style="display: none">
-        <button class="tab active" data-tab="transcript">字幕</button>
-        <button class="tab" data-tab="overview">概览</button>
+        <button class="tab active" data-tab="overview">概览</button>
         <button class="tab" data-tab="notes">摘录</button>
+        <button class="tab" data-tab="transcript">字幕</button>
       </div>
     </div>
 
@@ -121,8 +121,8 @@
 
       <!-- RESULTS -->
       <div id="resultsState" style="display: none">
-        <!-- TAB: Transcript (default - no LLM required) -->
-        <div class="tab-panel active" data-panel="transcript">
+        <!-- TAB: Transcript (no LLM required) -->
+        <div class="tab-panel" data-panel="transcript">
           <div class="section">
             <div class="section-header transcript-section-header">
               <div class="section-title">字幕全文</div>
@@ -208,45 +208,21 @@
           </div>
         </div>
 
-        <!-- TAB: Overview (chapters + key quotes) - requires LLM -->
-        <div class="tab-panel" data-panel="overview">
+        <!-- TAB: Overview (default; generation requires an explicit click) -->
+        <div class="tab-panel active" data-panel="overview">
           <div class="study-tools"><button id="generateOverviewBtn" class="enhance-btn">生成／继续概览</button><button id="regenerateOverviewBtn" class="enhance-btn">重新生成</button></div>
           <p class="help">点击后调用 AI；长视频分段处理，已完成部分保留。切换标签不会自动生成。</p>
           <div id="overviewSummary"></div>
           <!-- Chapters -->
-          <div class="section">
+          <div class="section" id="overviewChapters" hidden>
             <div class="section-title">章节</div>
-            <ul class="chapter-list" id="chapterList">
-              <li
-                class="chapter-item"
-                style="
-                  color: var(--text-muted);
-                  cursor: default;
-                  border-color: var(--border);
-                "
-              >
-                点击上方按钮生成章节
-              </li>
-            </ul>
+            <ul class="chapter-list" id="chapterList"></ul>
           </div>
 
           <!-- Key Quotes -->
-          <div class="section">
+          <div class="section" id="overviewQuotes" hidden>
             <div class="section-title">原文金句</div>
-            <div id="quotesList">
-              <div
-                class="quote-item"
-                style="
-                  color: var(--text-muted);
-                  border-left-color: var(--border);
-                  cursor: default;
-                "
-              >
-                <div class="quote-text" style="font-style: normal">
-                  生成概览后将在这里显示可核对的原文摘录。
-                </div>
-              </div>
-            </div>
+            <div id="quotesList"></div>
           </div>
         </div>
 

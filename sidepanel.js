@@ -267,7 +267,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkCurrentTab();
 });
 
-// Listen for messages from the Digest button on YouTube page
+// Listen for messages from the page entry button.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "startDigestFromButton") {
     // Load the digest for the current video. Served from cache when we've
@@ -275,6 +275,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // (This used to force-clear the cache on every click, which silently
     // burned a transcript credit + analysis tokens per click.)
     checkCurrentTab();
+    // The AI summary entry opens Overview, even when the panel is already open.
+    // Selecting this tab never starts a generation request.
+    switchTab("overview");
     sendResponse({ success: true });
   }
   if (message.action === "videoPageChanged" && sender.tab?.id === youtubeTabId) {
@@ -1539,19 +1542,17 @@ function switchTab(tabName) {
       contentArea.scrollTop = lastTranscriptScrollTop;
     });
     startPlaybackTracking();
+    restorePendingTranscriptViewState(currentVideoId);
   } else {
     stopPlaybackTracking();
   }
 
-  // Saved notes are stored newest first. Open Notes at the top so the note the
-  // user just created is the first item they see.
-  if (tabName === "notes") {
+  // Open Overview at its generation controls and Notes at its newest excerpt.
+  // Neither tab should inherit the transcript's reading position.
+  if (tabName === "overview" || tabName === "notes") {
     requestAnimationFrame(() => {
       const contentArea = document.getElementById("contentArea");
-      const notesPanelIsActive = document.querySelector(
-        '.tab-panel[data-panel="notes"].active',
-      );
-      if (contentArea && notesPanelIsActive) contentArea.scrollTop = 0;
+      if (contentArea && resultTabIsActive(tabName)) contentArea.scrollTop = 0;
     });
   }
 
@@ -2518,8 +2519,7 @@ function highlightActiveEntry(currentSeconds) {
       ? Number(nextEntry.dataset.seconds)
       : Infinity;
     const declaredEnd = Number(entry.dataset.endSeconds);
-    const endSeconds = Number.isFinite(declaredEnd) && declaredEnd > entrySeconds
-      ? Math.min(declaredEnd, nextSeconds) : nextSeconds;
+    const endSeconds = STUDY.cueEnd(entrySeconds, declaredEnd, nextSeconds);
     if (Number.isFinite(currentSeconds) && currentSeconds >= entrySeconds && currentSeconds < endSeconds) {
       activeEntry = entry;
     }
@@ -2682,12 +2682,21 @@ function captureCurrentTranscriptScrollTop() {
  */
 function restorePendingTranscriptViewState(videoId) {
   const state = pendingTranscriptViewState;
-  pendingTranscriptViewState = null;
   const contentArea = document.getElementById("contentArea");
   if (!state || state.videoId !== videoId) {
+    pendingTranscriptViewState = null;
     contentArea?.classList.remove("restoring-transcript-view");
     return;
   }
+
+  // Overview opens first. Defer restoring the transcript's scroll position
+  // until that tab is visible, without hiding or scrolling Overview.
+  if (!transcriptTabIsActive()) {
+    lastTranscriptScrollTop = state.scrollTop;
+    contentArea?.classList.remove("restoring-transcript-view");
+    return;
+  }
+  pendingTranscriptViewState = null;
 
   requestAnimationFrame(() => {
     if (currentVideoId !== videoId || !contentArea) {

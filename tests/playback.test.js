@@ -15,7 +15,7 @@ function harness(){
  const status={classList:{toggle(){}}};
  const listener={addListener(){}};
  const pending=[];
- const sandbox={console,URL,CSS:{escape:s=>s},setTimeout,clearTimeout,DIGEST_VIDEO:require('../platforms.js'),
+ const sandbox={console,URL,CSS:{escape:s=>s},setTimeout,clearTimeout,DIGEST_VIDEO:require('../platforms.js'),STUDY:require('../study-core.js'),
   document:{addEventListener(){},querySelector:()=>({}),querySelectorAll:()=>entries,
    getElementById:id=>id==='transcriptList'?{querySelectorAll:()=>entries}:id==='playbackStatus'?status:{style:{}}},
   window:{close(){}},

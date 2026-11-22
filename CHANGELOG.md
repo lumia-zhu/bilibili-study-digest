@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.1.19（本地预览）
+
+- 修复 B 站书签摘录提前取到上一句的问题。点击时按播放器时间匹配字幕，摘录时间和回跳位置取自该句的开始时间，保留小数秒。字幕空档或播放时间不明确时提示选取原文。
+
+## v0.1.18 — 2026-11-22（本地预览）
+
+- 视频操作栏入口改为「AI总结」，保留天蓝色圆角样式；窄窗口缩小内边距并收起摘录快捷键，避免遮挡原站控件。
+- 侧栏标签调整为「概览 → 摘录 → 字幕」，默认打开概览；页面入口再次点击时回到概览，仍需主动点击生成才调用 AI。
+- 未生成时隐藏空的「章节」「原文金句」；分批或缓存结果按各自内容独立显示，切字幕轨后清除旧标题。
+- 保留字幕阅读位置，进入字幕标签时再恢复，避免把概览滚到旧的阅读位置。
+
+Opens Overview first, orders tabs as Overview / Excerpts / Captions, and labels the Bilibili entry AI总结 (AI Summary). Empty chapter and quote sections stay hidden; partial and cached results reveal only populated sections. Opening the panel makes no automatic AI requests. Local preview only.
+
+## v0.1.17 — 2026-11-08（本地预览）
+
+- 修复启用插件后 B 站评论和推荐封面可能无法加载的问题：控件挂载到应用外的独立容器，不再向原站操作栏插入节点，避免打断页面初始化。
+- 「字幕」按钮继续按操作栏位置显示；滚动与缩放时跟随，窄窗口先收起摘录快捷键；操作栏不可见、全屏或无法容纳主按钮时隐藏，避免遮挡页面。
+- 增加原站页面结构保持、评论与推荐封面初始化、滚动隐藏及控件恢复的回归检查。
+
+Fixes Bilibili comments and recommendation covers failing to initialize when the extension inserts its entry into the site's rendered app. The entry now lives outside the app and follows the action bar's geometry, with visibility guards and page-initialization regression coverage. Local preview only.
+
 ## v0.1.16 — 2026-11-03（开发预览）
 
 - 将视频操作栏入口从英文 `digest` 改为中文「字幕」，更直接地说明用途。
